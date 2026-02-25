@@ -24,7 +24,7 @@ from hive_sbi_api.sbi.data import VOTER_ACCOUNTS
 from hive_sbi_api.hivesql.models import (HiveSQLComment,
                                          HiveSQLTxVotes,
                                          VoFillVestingWithdraw)
-
+from .models import Post, Vote
 
 logger = logging.getLogger('hivesql')
 app = current_app._get_current_object()
@@ -104,11 +104,10 @@ def set_max_vo_fill_vesting_withdrawn(self):
 
 @shared_task(bind=True)
 def sync_empty_votes_posts(self):
-    # TODO: We need to update this filter to target posts that haven't had 
-    # their total_rshares calculated yet, rather than posts with no votes.
+    # 1. Target posts that have no calculated rshares yet
+    # and haven't been confirmed as 'empty' by a previous run.
     posts_to_sync = Post.objects.filter(
-        # Replace this with the correct flag, e.g., total_rshares__isnull=True
-        vote=None, 
+        total_rshares=0, 
         empty_votes=False,
     )[:50]
 
@@ -116,32 +115,24 @@ def sync_empty_votes_posts(self):
     empty_posts_counter = 0
 
     for post in posts_to_sync:
-        # 1. Ask the database to instantly sum the rshares for this post
-        # (This replaces the entire JSON/dictionary loop)
-        total_rshares = Vote.objects.filter(post=post).aggregate(
-            total=Sum('rshares')
-        )['total'] or 0
+        # 2. Use the database to sum the related Vote rows
+        # This replaces the old JSON iteration entirely.
+        aggregate_result = post.vote_set.aggregate(total=Sum('rshares'))
+        total_found = aggregate_result['total'] or 0
 
-        # 2. Handle truly empty posts
-        if total_rshares == 0:
+        if total_found > 0:
+            post.total_rshares = total_found
+            # We save specifically to move this post out of the 'total_rshares=0' filter
+            post.save(update_fields=['total_rshares'])
+            posts_synced_counter += 1
+        else:
+            # 3. If no votes exist in the DB, mark it so we don't query it again
             post.empty_votes = True
             post.save(update_fields=['empty_votes'])
             empty_posts_counter += 1
-            continue
 
-        # 3. Save the aggregated total to the post
-        post.total_rshares = total_rshares
-        # We also need to flag the post as "synced" here so the query 
-        # doesn't pick it up again in the next batch of 50.
-        post.save(update_fields=['total_rshares']) 
-        posts_synced_counter += 1
-
-    return "Found {} empty posts. {} posts synchronized with new totals.".format(
-        empty_posts_counter,
-        posts_synced_counter,
-    )
-
-
+    return f"Processed {posts_to_sync.count()} posts. Updated: {posts_synced_counter}. Marked Empty: {empty_posts_counter}."
+  
 # Unused code
 @app.task(bind=True)
 def sync_older_posts_from_votes(self):
