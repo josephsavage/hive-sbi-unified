@@ -106,6 +106,7 @@ def set_max_vo_fill_vesting_withdrawn(self):
 def sync_empty_votes_posts(self):
     # 1. Target posts that have no calculated rshares yet
     # and haven't been confirmed as 'empty' by a previous run.
+    from hive_sbi_api.core.models import Post, Vote
     posts_to_sync = Post.objects.filter(
         total_rshares=0, 
         empty_votes=False,
