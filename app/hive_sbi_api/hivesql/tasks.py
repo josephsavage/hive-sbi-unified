@@ -24,7 +24,6 @@ from hive_sbi_api.sbi.data import VOTER_ACCOUNTS
 from hive_sbi_api.hivesql.models import (HiveSQLComment,
                                          HiveSQLTxVotes,
                                          VoFillVestingWithdraw)
-from .models import Post, Vote
 
 logger = logging.getLogger('hivesql')
 app = current_app._get_current_object()
