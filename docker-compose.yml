@@ -43,12 +43,13 @@ services:
       args:
         - DJANGO_ENV=prod
     # Overriding the script to add safety limits
-    command: celery -A hive_sbi_api worker -l info --concurrency=1 --max-tasks-per-child=10
+    command: su -m app -c "celery -A hive_sbi_api worker -l info --concurrency=1 --max-tasks-per-child=10"
+    depends_on:
+      - redis
+      - webapp
     env_file: .env
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    depends_on:
-      - redis
     restart: unless-stopped
     # Physical hardware limit
     deploy:
@@ -67,7 +68,12 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - redis
+      - webapp
+    volumes:
+      - webapp_data:/app/db.sqlite3
+      - beat_data:/app/beat_data
     restart: unless-stopped
 
 volumes:
   webapp_data:
+  beat_data:

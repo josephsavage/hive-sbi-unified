@@ -1,19 +1,15 @@
 import os
-import django
-import multiprocessing
-
 from celery import Celery
-multiprocessing.set_start_method("fork", force=True)
 
+# 1. Set the default Django settings module for the 'celery' program.
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "hive_sbi_api.settings")
 
-# Initialize Django BEFORE creating the Celery app or autodiscovering tasks
-django.setup()
+# 2. Name the app after your project module for consistency
+app = Celery("hive_sbi_api")
 
-app = Celery("service")
-
-# Load Celery config from Django settings
+# 3. Load config from Django settings, using a 'CELERY' namespace.
+# This step tells Celery to look at your Django settings and handles the setup.
 app.config_from_object("django.conf:settings", namespace="CELERY")
 
-# Autodiscover tasks in installed apps
+# 4. Autodiscover tasks from all installed Django apps.
 app.autodiscover_tasks()

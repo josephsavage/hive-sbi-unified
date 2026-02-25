@@ -10,7 +10,6 @@ from celery import (current_app,
                     shared_task)
 from celery.exceptions import Ignore
 from celery.schedules import crontab
-
 from django_celery_results.models import TaskResult
 
 from django.db.utils import IntegrityError
@@ -25,7 +24,7 @@ from hive_sbi_api.core.models import (Member,
                                       Transaction,
                                       Sponsee,
                                       FailedTransaction)
-
+from hive_sbi_api.celery import app
 from hive_sbi_api.core.data import (FAILED_TRX_TYPE_EMPTY_SPONSEE,
                                     FAILED_TRX_TYPE_NO_SPONSEE_ACCOUNT,
                                     FAILED_TRX_TYPE_BAD_SPONSEE_FORMAT)
@@ -38,9 +37,7 @@ BATCH_SIZE = 1000
 
 logger = logging.getLogger('sbi')
 
-app = current_app._get_current_object()
-
-@app.on_after_finalize.connect
+@app.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(
         crontab(hour=18, minute=0),
@@ -400,7 +397,7 @@ def sync_members(self):
     return f"Created {created_members} members. Updated {updated_members} members"
 
 
-@app.task
+@shared_task
 def clean_task_results():
     task_results_to_delete = TaskResult.objects.filter(
         date_done__lt=datetime.now() - timedelta(days=7)
