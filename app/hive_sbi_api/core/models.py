@@ -11,7 +11,10 @@ from .data import (TRX_SOURCE_CHOICES,
 
 logger = logging.getLogger('v1')
 
-# app/hive_sbi_api/core/models.py
+class SBISteemOpsManager(models.Manager):
+    def __init__(self):
+        super().__init__()
+        self._db = 'sbi_steem_ops'
 
 class MemberHist(models.Model):
     objects = SBISteemOpsManager()
