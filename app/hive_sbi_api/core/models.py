@@ -435,7 +435,7 @@ class Post(models.Model):
     vote_rshares = models.BigIntegerField()
     total_payout_value = models.FloatField()
     author_rewards = models.FloatField()
-    active_votes = models.JSONField(
+#    active_votes = models.JSONField(
         null=True,
     )
 
