@@ -285,7 +285,7 @@ def sync_post_votes(self):
                 # active_votes=hivesql_comment.active_votes,
                 total_rshares=0,
                 #has_beneficiaries=has_beneficiaries,
-                beneficiaries=hivesql_comment.beneficiaries,
+                #beneficiaries=hivesql_comment.beneficiaries,
                 percent_hbd=hivesql_comment.percent_hbd,
                 curator_payout_value=hivesql_comment.curator_payout_value,
             )
