@@ -13,6 +13,23 @@ logger = logging.getLogger('v1')
 
 # app/hive_sbi_api/core/models.py
 
+class MemberHist(models.Model):
+    objects = SBISteemOpsManager()
+
+    author = models.CharField(max_length=50)
+    permlink = models.CharField(
+        max_length=512,
+        primary_key=True,
+    )
+    timestamp = models.DateTimeField()
+
+    voter = models.CharField(max_length=50)
+
+    class Meta:
+        managed = False
+        db_table = 'member_hist'
+        ordering  = ['timestamp']
+
 class PostVotes(models.Model):
     post = models.OneToOneField(
         "core.Post",
