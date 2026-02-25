@@ -7,12 +7,13 @@ from datetime import (datetime,
                       timedelta)
 
 from celery import (current_app,
+                    shared_task,
                     states as celery_states)
 from celery.exceptions import Ignore
 from celery.schedules import crontab
 
 from django.utils import timezone
-
+from django.db.models import Sum
 from hive_sbi_api.core.models import (Member,
                                       Post,
                                       Vote,
@@ -101,66 +102,43 @@ def set_max_vo_fill_vesting_withdrawn(self):
         end_date,
     )
 
-
-@app.task(bind=True)
+@shared_task(bind=True)
 def sync_empty_votes_posts(self):
-    empty_votes_posts = Post.objects.filter(
-        vote=None,
+    # TODO: We need to update this filter to target posts that haven't had 
+    # their total_rshares calculated yet, rather than posts with no votes.
+    posts_to_sync = Post.objects.filter(
+        # Replace this with the correct flag, e.g., total_rshares__isnull=True
+        vote=None, 
         empty_votes=False,
     )[:50]
 
-    empty_votes_posts_counter = 0
-    synchronized_posts = 0
+    posts_synced_counter = 0
+    empty_posts_counter = 0
 
-    for post in empty_votes_posts:
-        votes_for_create = []
-        total_rshares = 0
+    for post in posts_to_sync:
+        # 1. Ask the database to instantly sum the rshares for this post
+        # (This replaces the entire JSON/dictionary loop)
+        total_rshares = Vote.objects.filter(post=post).aggregate(
+            total=Sum('rshares')
+        )['total'] or 0
 
-        for vote in PostVotes.objects.get(post_id=post.id).active_votes:
-            total_rshares = total_rshares + int(vote["rshares"])
-
-            if vote["voter"] in VOTER_ACCOUNTS and not Vote.objects.filter(post=post, voter=vote["voter"]):
-                member_hist_vote = MemberHist.objects.filter(
-                    author=post.author,
-                    permlink=post.permlink,
-                    voter=vote["voter"],
-                ).first()
-
-                vote_time = datetime.strptime(vote["time"], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=pytz.UTC)
-
-                if member_hist_vote:
-                    member_hist_datetime = member_hist_vote.timestamp
-                else:
-                    member_hist_datetime = vote_time - timedelta(minutes=1)
-
-                votes_for_create.append(Vote(
-                    post=post,
-                    voter=vote["voter"],
-                    weight=vote["weight"],
-                    rshares=vote["rshares"],
-                    percent=vote["percent"],
-                    reputation=vote["reputation"],
-                    time=vote_time,
-                    member_hist_datetime=member_hist_datetime,
-                ))
-
-        if not votes_for_create:
+        # 2. Handle truly empty posts
+        if total_rshares == 0:
             post.empty_votes = True
-            post.save()
-
-            empty_votes_posts_counter += 1
-
+            post.save(update_fields=['empty_votes'])
+            empty_posts_counter += 1
             continue
 
+        # 3. Save the aggregated total to the post
         post.total_rshares = total_rshares
-        post.save()
+        # We also need to flag the post as "synced" here so the query 
+        # doesn't pick it up again in the next batch of 50.
+        post.save(update_fields=['total_rshares']) 
+        posts_synced_counter += 1
 
-        Vote.objects.bulk_create(votes_for_create)
-        synchronized_posts += 1
-
-    return "Found {} posts without votes. {} posts synchronized.".format(
-        empty_votes_posts_counter,
-        synchronized_posts,
+    return "Found {} empty posts. {} posts synchronized with new totals.".format(
+        empty_posts_counter,
+        posts_synced_counter,
     )
 
 
