@@ -212,12 +212,19 @@ def sync_older_posts_from_votes(self):
         already_registered_post_counter, created_post_counter, new_min_timestamp)
 
 
-@app.task(bind=True)
+@shared_task(bind=True)
 def sync_post_votes(self):
+    # 1. Lazy Imports: These only execute when the task runs.
+    # This prevents the "NameError" and "ImportError" during Celery/Beat startup.
+    from hive_sbi_api.core.models import Post, Vote, MemberHist, PostVotes
+    from hive_sbi_api.hivesql.models import HiveSQLComment
+    from django.conf import settings
+    from django.utils import timezone
+    
+    VOTER_ACCOUNTS = getattr(settings, 'VOTER_ACCOUNTS', [])
     logger.info("Initializing votes sync")
 
     last_sync_datetime = None
-
     if Vote.objects.exists():
         last_sync_vote = Vote.objects.latest("member_hist_datetime")
         last_sync_datetime = last_sync_vote.member_hist_datetime
@@ -226,7 +233,7 @@ def sync_post_votes(self):
     timestamp_limit = timestamp_limit.replace(tzinfo=pytz.UTC)
 
     if last_sync_datetime:
-        logger.info("last_sync_datetime: {}".format(last_sync_datetime))
+        logger.info(f"last_sync_datetime: {last_sync_datetime}")
         member_hist_qr = MemberHist.objects.filter(
             voter__in=VOTER_ACCOUNTS,
             timestamp__gt=last_sync_datetime,
@@ -242,35 +249,23 @@ def sync_post_votes(self):
     votes_for_create = []
 
     for member_hist in member_hist_qr:
-        author = member_hist.author
-        permlink = member_hist.permlink
-        timestamp = member_hist.timestamp
-        voter = member_hist.voter
+        author, permlink = member_hist.author, member_hist.permlink
 
-        post = Post.objects.filter(
-            author=author,
-            permlink=permlink,
-        ).first()
+        post = Post.objects.filter(author=author, permlink=permlink).first()
 
         if not post:
-            new_posts_counter += 1
-
-            hivesql_comment = HiveSQLComment.objects.filter(
-                author=author,
-                permlink=permlink,
-            ).first()
-
+            hivesql_comment = HiveSQLComment.objects.filter(author=author, permlink=permlink).first()
             if not hivesql_comment:
                 continue
-
-            if Post.objects.filter(
-                author=hivesql_comment.author,
-                permlink=hivesql_comment.permlink,
-            ).exists():
+            
+            # Final safety check before creation
+            if Post.objects.filter(author=author, permlink=permlink).exists():
                 continue
 
-            # Resilient to None, empty strings, and empty lists
-            # has_beneficiaries = bool(hivesql_comment.beneficiaries) if hivesql_comment.beneficiaries is not None else False
+            new_posts_counter += 1
+
+            # Resilient flag (commented out per request)
+            # has_beneficiaries = bool(getattr(hivesql_comment, 'beneficiaries', None))
 
             post = Post.objects.create(
                 author=hivesql_comment.author,
@@ -280,49 +275,58 @@ def sync_post_votes(self):
                 vote_rshares=hivesql_comment.vote_rshares,
                 total_payout_value=hivesql_comment.total_payout_value,
                 author_rewards=hivesql_comment.author_rewards,
-                # active_votes=hivesql_comment.active_votes,
                 total_rshares=0,
                 # has_beneficiaries=has_beneficiaries,
-                #beneficiaries=hivesql_comment.beneficiaries,
+                # beneficiaries=hivesql_comment.beneficiaries,
                 percent_hbd=hivesql_comment.percent_hbd,
                 curator_payout_value=hivesql_comment.curator_payout_value,
             )
 
             total_rshares = 0
+            
+            # Extraction logic: Use .get() to avoid KeyErrors on missing JSON fields
+            try:
+                # Still using PostVotes model as requested, assuming it houses the raw JSON
+                raw_votes = PostVotes.objects.get(post_id=post.id).active_votes or []
+            except (PostVotes.DoesNotExist, AttributeError):
+                raw_votes = []
 
-            for vote in PostVotes.objects.get(post_id=post.id).active_votes:
-                total_rshares = total_rshares + int(vote["rshares"])
+            for vote in raw_votes:
+                v_rshares = int(vote.get("rshares", 0))
+                total_rshares += v_rshares
+                voter_name = vote.get("voter")
 
-                if vote["voter"] in VOTER_ACCOUNTS and not Vote.objects.filter(post=post, voter=vote["voter"]):
+                if voter_name in VOTER_ACCOUNTS:
+                    if not Vote.objects.filter(post=post, voter=voter_name).exists():
+                        
+                        m_hist_vote = MemberHist.objects.filter(
+                            author=author, permlink=permlink, voter=voter_name
+                        ).first()
 
-                    member_hist_vote = MemberHist.objects.filter(
-                        author=author,
-                        permlink=permlink,
-                        voter=vote["voter"],
-                    ).first()
+                        v_time_str = vote.get("time")
+                        v_time = datetime.strptime(v_time_str, '%Y-%m-%dT%H:%M:%S').replace(tzinfo=pytz.UTC)
 
-                    vote_time = datetime.strptime(vote["time"], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=pytz.UTC) 
+                        m_datetime = m_hist_vote.timestamp if m_hist_vote else v_time - timedelta(minutes=1)
 
-                    if member_hist_vote:
-                        member_hist_datetime = member_hist_vote.timestamp 
-                    else:
-                        member_hist_datetime = vote_time - timedelta(minutes=1)
-
-                    votes_for_create.append(Vote(
-                        post=post,
-                        voter=vote["voter"],
-                        weight=vote["weight"],
-                        rshares=vote["rshares"],
-                        percent=vote["percent"],
-                        reputation=vote["reputation"],
-                        time=vote_time,
-                        member_hist_datetime=member_hist_datetime,
-                    ))
+                        votes_for_create.append(Vote(
+                            post=post,
+                            voter=voter_name,
+                            weight=vote.get("weight"),
+                            rshares=v_rshares,
+                            percent=vote.get("percent"),
+                            reputation=vote.get("reputation"),
+                            time=v_time,
+                            member_hist_datetime=m_datetime,
+                        ))
 
             post.total_rshares = total_rshares
-            post.save()
+            post.save(update_fields=['total_rshares'])
 
-    Vote.objects.bulk_create(votes_for_create)
+    if votes_for_create:
+        Vote.objects.bulk_create(votes_for_create, ignore_conflicts=True)
+    
+    # Trigger the post-sync cleanup
+    from .tasks import sync_empty_votes_posts
     sync_empty_votes_posts.delay()
 
-    return "Created {} posts and {} votes".format(new_posts_counter, len(votes_for_create))
+    return f"Created {new_posts_counter} posts and {len(votes_for_create)} votes"
