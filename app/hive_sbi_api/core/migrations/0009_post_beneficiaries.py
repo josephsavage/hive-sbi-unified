@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='post',
             name='beneficiaries',
-            field=models.JSONField(null=True),
+            field=models.JSONField(null=False),
         ),
     ]
