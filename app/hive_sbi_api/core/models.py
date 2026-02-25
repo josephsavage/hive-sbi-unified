@@ -441,7 +441,6 @@ class Post(models.Model):
         null=True,
         blank=True,
     )
-
     curator_payout_value = models.FloatField(
         null=True,
         blank=True,
