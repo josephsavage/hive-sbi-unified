@@ -7,6 +7,11 @@ DEBUG = False
 
 ALLOWED_HOSTS = ['*'] 
 
+# --- API Endpoint Configuration ---
+# Route traffic through Docker's internal network to the 'api' container on port 8009
+SBIAPIURL = os.environ.get('SBI_API_URL', 'http://api:8009')
+SBIAPIURL_V1 = os.environ.get('SBI_API_URL_V1', 'http://api:8009/v1')
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -31,4 +36,3 @@ LOGGING = {
         },
     }
 }
-
