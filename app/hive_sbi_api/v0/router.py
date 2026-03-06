@@ -1,6 +1,6 @@
 from rest_framework import routers
 from .views import MemberViewSet
-
+from .views import legacy_get_user_info
 
 router = routers.DefaultRouter()
 router.register(r'users', MemberViewSet)
