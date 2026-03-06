@@ -8,7 +8,6 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.views.generic import TemplateView
 from django.shortcuts import render
-from utils.metabase import signeddashboardurl
 
 from .viewmixins import BaseMixinView
 from .forms import UseInfoForm
