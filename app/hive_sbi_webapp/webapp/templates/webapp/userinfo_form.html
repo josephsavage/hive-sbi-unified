@@ -1,123 +1,83 @@
-{% extends 'layout/base.html' %}
-
+{% extends "webapp/base.html" %}
 {% load static %}
 
-{% block title %}User Info{% endblock %}
-
 {% block content %}
-<div class="card">
-  <div class="card-header">
-    <h5 class="text-dark">Get User Info Form</h5>
-  </div>
-  <div class="card-body">
-    <form method="get">
-      <div class="mb-3">
-        <label class="form-label">{{ userinfo_form.user.label_tag }}</label>
-        {{ userinfo_form.user }}
+<div class="container mt-4">
 
-        {% if userinfo_form.user.errors %}
-        <ul class="list-unstyled">
-          {% for error in userinfo_form.user.errors %}
-          <li  class="alert-dismissible fade show alert alert-danger" role="alert">
-            {{ error }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-      </div>
+    <h2 class="mb-4">SBI User Information</h2>
 
-      <button type="submit" class="btn btn-dark">Search</button>
+    <form method="get" action="{% url 'userinfo' %}">
+        <div class="input-group mb-4">
+            <input type="text" name="user" class="form-control" placeholder="Enter username" value="{{ request.GET.user }}">
+            <button class="btn btn-primary" type="submit">Lookup</button>
+        </div>
     </form>
-  </div>
+
+    <div class="row">
+
+        <!-- ========================= -->
+        <!--        STEEM (v0)         -->
+        <!-- ========================= -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    Steem SBI (v0)
+                </div>
+                <div class="card-body">
+
+                    {% if userinfo and userinfo.success %}
+                        <p><strong>Shares:</strong> {{ userinfo.data.shares }}</p>
+                        <p><strong>Bonus Shares:</strong> {{ userinfo.data.bonusShares }}</p>
+                        <p><strong>Total Shares:</strong> {{ userinfo.data.totalShares }}</p>
+                        <p><strong>Balance R-Shares:</strong> {{ userinfo.data.balanceRShares }}</p>
+                        <p><strong>Subscribed R-Shares:</strong> {{ userinfo.data.subscribedRShares }}</p>
+                        <p><strong>Curation R-Shares:</strong> {{ userinfo.data.curationRShares }}</p>
+                        <p><strong>Delegation R-Shares:</strong> {{ userinfo.data.delegationRShares }}</p>
+                        <p><strong>Other R-Shares:</strong> {{ userinfo.data.otherRShares }}</p>
+                        <p><strong>Total R-Shares:</strong> {{ userinfo.data.totalRShares }}</p>
+                        <p><strong>Rewarded R-Shares:</strong> {{ userinfo.data.rewardedRShares }}</p>
+                        <p><strong>Comment Upvote:</strong> {{ userinfo.data.commentUpvote }}</p>
+                        <p><strong>Estimated Balance Value:</strong> {{ userinfo.data.estimateBalanceValue }}</p>
+                        <p><strong>Estimated Next Vote:</strong> {{ userinfo.data.estimatedNextVote }}</p>
+                        <p><strong>Estimated Rewarded:</strong> {{ userinfo.data.estimateRewarded }}</p>
+                        <p><strong>Blacklisted:</strong> {{ userinfo.data.blacklisted }}</p>
+                        <p><strong>Skiplisted:</strong> {{ userinfo.data.skiplisted }}</p>
+
+                    {% else %}
+                        <p class="text-muted">No Steem SBI data available for this user.</p>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================= -->
+        <!--         HIVE (v1)         -->
+        <!-- ========================= -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    Hive SBI (v1)
+                </div>
+                <div class="card-body">
+
+                    {% if userinfo_hive and userinfo_hive.success %}
+                        <p><strong>Shares:</strong> {{ userinfo_hive.data.shares }}</p>
+                        <p><strong>Pending Balance:</strong> {{ userinfo_hive.data.pending_balance }}</p>
+                        <p><strong>Next Upvote Estimate:</strong> {{ userinfo_hive.data.next_upvote_estimate }}</p>
+                        <p><strong>Household:</strong> {{ userinfo_hive.data.household_id }}</p>
+                        <p><strong>Last Updated:</strong> {{ userinfo_hive.status.lastUpdatedTime }}</p>
+                        <p><strong>Minutes Until Next Update:</strong> {{ userinfo_hive.status.estimatedMinutesUntilNextUpdate }}</p>
+
+                    {% else %}
+                        <p class="text-muted">No Hive SBI data available for this user.</p>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
 </div>
-
-<div class="padding-top-15px"></div>
-
-{% if user %}
-<a href="{% url 'enrolled_hive_sbi' %}?user={{ user }}" class="btn btn-outline-dark btn-sm">Transaction history</a>
-<a href="{% url 'delivered_votes' %}?user={{ user }}" class="btn btn-outline-dark btn-sm">Delivered votes</a>
-
-<div class="padding-top-15px"></div>
-
-<div class="row">
-  <div class="col-md-6 col-sm-12">
-    {% if userinfo_hive.success %}
-    <div class="card">
-      <div class="card-header">
-        <h5 class="text-dark">Hive User Info</h5>
-      </div>
-      <div class="card-body">
-        <h5 class="card-title">{{ user }}</h5>
-
-        <dl class="row">
-          <dt class="col-sm-4">Total units</dt>
-          <dd class="col-sm-8">{{ userinfo_hive.data.totalShares }}</dd>
-
-          <dt class="col-sm-4">Units</dt>
-          <dd class="col-sm-8">{{ userinfo_hive.data.shares }}</dd>
-
-          <dt class="col-sm-4">Bonus Units</dt>
-          <dd class="col-sm-8">{{ userinfo_hive.data.bonusShares }}</dd>
-
-          <dt class="col-sm-4">Balance value estimate</dt>
-          <dd class="col-sm-8">{{ userinfo_hive.data.estimateBalanceValue }}</dd>
-
-          <dt class="col-sm-4">Next vote estimate</dt>
-          <dd class="col-sm-8">{{ userinfo_hive.data.estimatedNextVote }}</dd>
-
-          <dt class="col-sm-4">Rewarded estimate</dt>
-          <dd class="col-sm-8">{{ userinfo_hive.data.estimateRewarded }}</dd>
-
-          {% if userinfo_hive.data.skiplisted %}
-          <dt class="col-sm-4">Skiplist</dt>
-          <dd class="col-sm-8">{{ userinfo_hive.data.skiplisted }}</dd>
-          {% endif %}
-       </dl>
-      </div>
-    </div>
-    {% else %}
-    <div class="alert alert-secondary" role="alert">
-      <strong>User Info:</strong> Not information for user <strong>{{ user }}</strong>!<br>
-      {{ userinfo_hive.error }}
-    </div>
-    {% endif %}  
-  </div>
-
-  <div class="col-md-6 col-sm-12">
-    {% if userinfo.success %}
-    <div class="card">
-      <div class="card-header">
-        <h5 class="text-dark">Steem User Info</h5>
-      </div>
-      <div class="card-body">
-        <h5 class="card-title">{{ user }}</h5>
-
-        <dl class="row">
-          <dt class="col-sm-4">Units</dt>
-          <dd class="col-sm-8">{{ userinfo.data.shares }}</dd>
-
-          <dt class="col-sm-4">Bonus Units</dt>
-          <dd class="col-sm-8">{{ userinfo.data.bonusShares }}</dd>
-
-          <dt class="col-sm-4">Balance value estimate</dt>
-          <dd class="col-sm-8">{{ userinfo.data.estimateBalanceValue }}</dd>
-
-          <dt class="col-sm-4">Next vote estimate</dt>
-          <dd class="col-sm-8">{{ userinfo.data.estimatedNextVote }}</dd>
-
-          <dt class="col-sm-4">Rewarded estimate</dt>
-          <dd class="col-sm-8">{{ userinfo.data.estimateRewarded }}</dd>
-       </dl>
-      </div>
-    </div>
-    {% else %}
-    <div class="alert alert-secondary" role="alert">
-      <strong>Steem User Info:</strong> No information for user <strong>{{ user }}</strong>!<br>
-      {{ userinfo.error }}
-    </div>
-    {% endif %}
-  </div>
-</div>  
-{% endif %}
 {% endblock %}
