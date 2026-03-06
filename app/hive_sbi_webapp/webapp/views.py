@@ -107,7 +107,7 @@ class UserInfoView(BaseMixinView, TemplateView):  # Renamed from UserInfoForm to
 
         try:
             response = requests.get(
-                "{}/users/{}/".format(settings.SBIAPIURL_V1, user),
+                "{}/v1/users/{}/".format(settings.SBIAPIURL_V1, user),
                 timeout=10,
             )
         except requests.exceptions.RequestException:
