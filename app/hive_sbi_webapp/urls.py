@@ -39,7 +39,7 @@ urlpatterns = [
     path(
         'userinfo/',
         UserInfoView.as_view(),
-        name='userinfo_form',
+        name='userinfo',
     ),
 
     path(
