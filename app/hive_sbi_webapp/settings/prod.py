@@ -1,3 +1,5 @@
+# app/hive_sbi_webapp/settings/prod.py
+
 from .base import *
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
