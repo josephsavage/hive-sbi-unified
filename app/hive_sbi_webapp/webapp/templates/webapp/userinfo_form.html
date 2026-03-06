@@ -13,6 +13,35 @@
         </div>
     </form>
 
+            <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    Hive SBI (v1)
+                </div>
+                <div class="card-body">
+
+                    {% if userinfohive and userinfohive.success %}
+                        <p><strong>Shares:</strong> {{ userinfohive.data.shares }}</p>
+                        <p><strong>Bonus Shares:</strong> {{ userinfohive.data.bonus_shares }}</p>
+                        <p><strong>Total Shares:</strong> {{ userinfohive.data.total_shares }}</p>
+                        <p><strong>Balance R-Shares:</strong> {{ userinfohive.data.balance_rshares }}</p>
+                        <p><strong>Subscribed R-Shares:</strong> {{ userinfohive.data.subscribed_rshares }}</p>
+                        <p><strong>Rewarded R-Shares:</strong> {{ userinfohive.data.rewarded_rshares }}</p>
+                        <p><strong>Pending Balance:</strong> {{ userinfohive.data.pending_balance }}</p>
+                        <p><strong>Next Upvote Estimate:</strong> {{ userinfohive.data.next_upvote_estimate }}</p>
+                        <p><strong>Estimated Rewarded:</strong> {{ userinfohive.data.estimate_rewarded }}</p>
+                        <p><strong>Skiplist:</strong> {{ userinfohive.data.skiplist }}</p>
+                        <p><strong>Last Updated:</strong> {{ userinfohive.data.updated_at }}</p>
+
+                    {% else %}
+                        <p class="text-muted">No Hive SBI data available for this user.</p>
+                    {% endif %}
+
+                </div>
+            </div>
+            </div>
+    
+
     <div class="row">
 
         <!-- ========================= -->
@@ -50,34 +79,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- ========================= -->
-        <!--         HIVE (v1)         -->
-        <!-- ========================= -->
-        <div class="col-md-6">
-            <div class="card mb-4">
-                <div class="card-header bg-danger text-white">
-                    Hive SBI (v1)
-                </div>
-                <div class="card-body">
-
-                    {% if userinfo_hive and userinfo_hive.success %}
-                        <p><strong>Shares:</strong> {{ userinfo_hive.data.shares }}</p>
-                        <p><strong>Pending Balance:</strong> {{ userinfo_hive.data.pending_balance }}</p>
-                        <p><strong>Next Upvote Estimate:</strong> {{ userinfo_hive.data.next_upvote_estimate }}</p>
-                        <p><strong>Household:</strong> {{ userinfo_hive.data.household_id }}</p>
-                        <p><strong>Last Updated:</strong> {{ userinfo_hive.status.lastUpdatedTime }}</p>
-                        <p><strong>Minutes Until Next Update:</strong> {{ userinfo_hive.status.estimatedMinutesUntilNextUpdate }}</p>
-
-                    {% else %}
-                        <p class="text-muted">No Hive SBI data available for this user.</p>
-                    {% endif %}
-
-                </div>
-            </div>
-        </div>
-
-    </div>
 
 </div>
 {% endblock %}
