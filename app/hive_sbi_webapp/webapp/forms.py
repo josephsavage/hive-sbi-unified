@@ -1,7 +1,7 @@
 from django import forms
 
 
-class UseInfoForm(forms.Form):
+class UserInfoForm(forms.Form):
     user = forms.CharField(
         required=False,
         max_length=100,
