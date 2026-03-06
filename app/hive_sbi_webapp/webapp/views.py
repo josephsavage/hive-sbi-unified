@@ -26,7 +26,7 @@ class HomeView(BaseMixinView, TemplateView):
 
 
 class UserInfoView(BaseMixinView, TemplateView):  # Renamed from UserInfoForm to avoid collision with the actual form
-    template_name = "webapp/userinfoform.html"  # Corrected templatename
+    template_name = "webapp/userinfo_form.html"  # Corrected templatename
 
     def get_user(self, **kwargs):
         return self.request.GET.get('user')
@@ -151,7 +151,7 @@ class UserInfoView(BaseMixinView, TemplateView):  # Renamed from UserInfoForm to
 
 
 class TransactionHistory(BaseMixinView, TemplateView):
-    template_name = "webapp/transactionhistory.html"
+    template_name = "webapp/transaction_history.html"
 
     def get_user(self, **kwargs):
         return self.request.GET.get('user')
@@ -331,7 +331,7 @@ class SponsoredHiveSBI(TransactionHistory):
 
 
 class DeliveredVotesView(BaseMixinView, TemplateView):
-    template_name = "webapp/deliveredvotes.html"
+    template_name = "webapp/delivered_votes.html"
 
     def get_user(self, **kwargs):
         if self.request.GET.get('user'):
