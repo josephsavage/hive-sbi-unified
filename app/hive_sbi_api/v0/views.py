@@ -16,11 +16,13 @@ from drf_yasg.utils import swagger_auto_schema
 from django_celery_results.models import TaskResult
 
 from hive_sbi_api.core.models import Member
-from .serializers import (
+
+# IMPORTANT: explicitly import the V0 serializers
+from hive_sbi_api.v0.serializers import (
     UserSerializer,
     NotFoundSerializer,
     StatusSerializer,
-    MemberSerializer,
+    MemberSerializer as SteemMemberSerializer,
 )
 
 logger = logging.getLogger("v0")
@@ -30,7 +32,7 @@ logger = logging.getLogger("v0")
 def legacy_get_user_info(request):
     username = request.GET.get("user", "").lower()
     member = get_object_or_404(Member, account=username)
-    return Response(MemberSerializer(member).data)
+    return Response(SteemMemberSerializer(member).data)
 
 
 class MemberViewSet(RetrieveModelMixin, GenericViewSet):
@@ -38,7 +40,7 @@ class MemberViewSet(RetrieveModelMixin, GenericViewSet):
     lookup_field = "account"
 
     queryset = Member.objects.all()
-    serializer_class = MemberSerializer
+    serializer_class = SteemMemberSerializer
 
     user_response = openapi.Response("response description", UserSerializer)
 
