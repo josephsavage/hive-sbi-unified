@@ -4,6 +4,8 @@ services:
       context: ./app
       args:
         - DJANGO_ENV=prod
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file: .env
     # Override settings for the webapp module
     environment:
