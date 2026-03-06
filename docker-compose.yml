@@ -23,7 +23,7 @@ services:
 
   api:
     build: 
-      context: ./app
+      context: .
       args:
         - DJANGO_ENV=prod
     env_file: .env
