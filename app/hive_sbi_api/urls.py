@@ -40,7 +40,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', RedirectView.as_view(url='docs')),
     path('docs/', schema_view.with_ui()),
-
+    path("getUserInfo", legacy_get_user_info),
     path('', include((api_v0, 'v0'), namespace='v0')),
     path('v1/', include((api_v1, 'v1'), namespace='v1')),
 ]
