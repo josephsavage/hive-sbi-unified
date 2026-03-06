@@ -23,6 +23,17 @@ from .serializers import (
     StatusSerializer,
     MemberSerializer,
 )
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from hive_sbi_api.core.models import Member
+from .serializers import MemberSerializer
+
+@api_view(["GET"])
+def legacy_get_user_info(request):
+    username = request.GET.get("user", "").lower()
+    member = get_object_or_404(Member, account=username)
+    return Response(MemberSerializer(member).data)
 
 logger = logging.getLogger("v0")
 
