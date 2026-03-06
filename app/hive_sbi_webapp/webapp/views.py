@@ -8,10 +8,6 @@ from django.views.generic import TemplateView
 from django.shortcuts import render
 from utils.metabase import signed_dashboard_url
 
-def richlist_view(request):
-    iframe_url = settings.METABASE_SITE_URL
-    return render(request, "webapp/richlist.html", {"iframe_url": iframe_url})
-
 from .viewmixins import BaseMixinView
 from .forms import UseInfoForm
 
