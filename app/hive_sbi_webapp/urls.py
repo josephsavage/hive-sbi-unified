@@ -19,7 +19,7 @@ from django.conf import settings
 from django.conf.urls import include
 
 from hive_sbi_webapp.webapp.views import (HomeView,
-                                          UserInfoForm,
+                                          UserInfoView,
                                           TransactionHistory,
                                           EnrolledHiveSBI,
                                           SponsoredHiveSBI,
@@ -36,7 +36,7 @@ urlpatterns = [
 
     path(
         'userinfo/',
-        UserInfoForm.as_view(),
+        UserInfoView.as_view(),
         name='userinfo_form',
     ),
 
