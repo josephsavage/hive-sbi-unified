@@ -151,11 +151,11 @@ class UserInfoForm(BaseMixinView, TemplateView):
         return context
 
 
-Removed RichListView per project decision to replace with Metabase dashboards.
+# Removed RichListView per project decision to replace with Metabase dashboards.
 
-If you later want a server-side rich list, reintroduce a dedicated view here.
+# If you later want a server-side rich list, reintroduce a dedicated view here.
 
-Remaining views below unchanged (kept for completeness).
+# Remaining views below unchanged (kept for completeness).
 
 
 class TransactionHistory(BaseMixinView, TemplateView):
