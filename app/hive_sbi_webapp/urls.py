@@ -20,7 +20,6 @@ from django.conf.urls import include
 
 from hive_sbi_webapp.webapp.views import (HomeView,
                                           UserInfoForm,
-                                          RichListView,
                                           TransactionHistory,
                                           EnrolledHiveSBI,
                                           SponsoredHiveSBI,
