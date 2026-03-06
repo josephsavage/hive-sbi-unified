@@ -8,3 +8,8 @@ router = routers.DefaultRouter()
 router.register(r'users', MemberViewSet)
 
 api_v0_urlpatterns = router.urls
+api_v0_urlpatterns = [
+    path("getUserInfo", legacy_get_user_info),
+    path("users/<account>/", MemberViewSet.as_view({"get": "retrieve"})),
+    ...
+]
