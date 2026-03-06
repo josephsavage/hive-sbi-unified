@@ -1,3 +1,5 @@
+# app/hive_sbi_webapp/webapp/views.py
+
 import json
 import logging
 import requests
@@ -40,42 +42,54 @@ class UserInfoForm(BaseMixinView, TemplateView):
 
         return UseInfoForm(initial=initial)
 
-    def get_userinfo(self, **kwargs):
-        user = self.get_user()
-        userinfo = None
-
-        if not user:
-            return userinfo
-
-
-        userinfo = {
-            "status_code": None,
+    def get_userinfo(self):
+    user = self.request.GET.get("user", "").strip().lower()
+    if not user:
+        return {
             "success": False,
-            "data": None,        
-            "error": None,
+            "data": None,
+            "error": "No user provided",
+            "status": None,
         }
 
-        try:
-            response = requests.get(
-                "{}/getUserInfo?user={}".format(settings.SBI_API_URL, user),
-            )
+    url = f"{settings.SBI_API_URL}/getUserInfo?user={user}"
 
-            userinfo["status_code"] = response.status_code
+    try:
+        r = requests.get(url, timeout=10)
+        content = r.json()
+    except Exception:
+        return {
+            "success": False,
+            "data": None,
+            "error": "API unreachable",
+            "status": None,
+        }
 
-            if response.status_code == 200:
-                content = json.loads(response.content.decode("utf-8"))
+    # --- CASE 1: Legacy v0 response (raw fields, no wrapper) ---
+    if isinstance(content, dict) and "shares" in content and "totalShares" in content:
+        return {
+            "success": True,
+            "data": content,   # raw v0 data
+            "error": None,
+            "status": None,    # v0 has no status block
+        }
 
-                userinfo["success"] = content["success"]
+    # --- CASE 2: Unified wrapper (if ever added later) ---
+    if "success" in content:
+        return {
+            "success": content.get("success", False),
+            "data": content.get("data"),
+            "error": content.get("error"),
+            "status": content.get("status"),
+        }
 
-                if userinfo["success"]:
-                    userinfo["data"] = content["data"]
-                else:
-                    userinfo["error"] = content["error"]
-
-        except requests.exceptions.ConnectionError:
-            userinfo["error"] = "Connection Error"
-
-        return userinfo
+    # --- CASE 3: Unexpected format ---
+    return {
+        "success": False,
+        "data": None,
+        "error": "Unexpected API response",
+        "status": None,
+    }
 
     def get_userinfo_hive(self, **kwargs):
         user = self.get_user()
