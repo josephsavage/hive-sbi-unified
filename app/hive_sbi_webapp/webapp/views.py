@@ -1,5 +1,3 @@
-# app/hive_sbi_webapp/webapp/views.py
-
 import json
 import logging
 import requests
@@ -268,5 +266,172 @@ class SponsoredHiveSBI(TransactionHistory):
         LIMIT = 200
 
         try:
-            offset = int(
-                
+            offset = int(self.request.GET.get("offset", 0))
+        except ValueError:
+            offset = 0
+
+        sponsoredhive_sbi = {
+            "status_code": None,
+            "previous": None,
+            "next": None,
+            "activepagenumber": None,
+            "prevpagenumber": None,
+            "nextpagenumber": None,
+        }
+
+        try:
+            params = "?sponsee={}".format(self.get_user())
+
+            if offset:
+                if params:
+                    params = "{}&offset={}".format(params, offset)
+                else:
+                    params = "?offset={}".format(offset)
+
+            response = requests.get(
+                "{}/v1/transactions/{}".format(settings.SBIAPIURL_V1, params),
+                timeout=10,
+            )
+
+            sponsoredhive_sbi["status_code"] = response.status_code
+
+            if response.status_code == 200:
+                content = json.loads(response.content.decode("utf-8"))
+
+                if content.get("previous"):
+                    sponsoredhive_sbi["previous"] = content["previous"].split(
+                        "?")[1].replace('sponsee=', 'user=')
+
+                if content.get("next"):
+                    sponsoredhive_sbi["next"] = content["next"].split(
+                        "?")[1].replace('sponsee=', 'user=')
+
+                activepagenumber = offset / LIMIT + 1
+
+                sponsoredhive_sbi["activepagenumber"] = int(activepagenumber)
+                sponsoredhive_sbi["prevpagenumber"] = int(activepagenumber - 1)
+
+                if offset + 200 < content.get("count", 0):
+                    sponsoredhive_sbi["nextpagenumber"] = int(activepagenumber + 1)
+
+                sponsoredhive_sbi["results"] = content.get("results", [])
+
+        except requests.exceptions.ConnectionError:
+            sponsoredhive_sbi["content"] = "Connection Error"
+
+        return sponsoredhive_sbi
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['activesponsoredhive_sbi'] = True
+        context['trxlist'] = self.get_sponsored_hive_sbi()
+        return context
+
+
+class DeliveredVotesView(BaseMixinView, TemplateView):
+    template_name = "webapp/deliveredvotes.html"
+
+    def get_user(self, **kwargs):
+        if self.request.GET.get('user'):
+            return self.request.GET.get('user')
+
+        return self.request.GET.get('author')
+
+    def get_userinfo_form(self, **kwargs):
+        user = self.get_user()
+        initial = {}
+
+        if user:
+            initial = {'user': user}
+
+        return UserInfoForm(initial=initial)
+
+    def get_posts(self, **kwargs):
+        LIMIT = 200
+
+        ordering = self.request.GET.get("ordering", "")
+
+        try:
+            offset = int(self.request.GET.get("offset", 0))
+        except ValueError:
+            offset = 0
+
+        posts = {
+            "status_code": None,
+            "previous": None,
+            "next": None,
+            "activepagenumber": None,
+            "prevpagenumber": None,
+            "nextpagenumber": None,
+        }
+
+        try:
+            if ordering:
+                params = "?ordering={}".format(ordering)
+            else:
+                params = "?ordering=-created"
+
+            if self.get_user():
+                params = "{}&author={}".format(params, self.get_user())
+
+            if offset:
+                if params:
+                    params = "{}&offset={}".format(params, offset)
+                else:
+                    params = "?offset={}".format(offset)
+
+            response = requests.get(
+                "{}/v1/posts/{}".format(settings.SBIAPIURL_V1, params),
+                timeout=10,
+            )
+
+            posts["status_code"] = response.status_code
+
+            if response.status_code == 200:
+                content = json.loads(response.content.decode("utf-8"))
+
+                if content.get("previous"):
+                    posts["previous"] = content["previous"].split(
+                        "?")[1].replace('account=', 'author=')
+
+                if content.get("next"):
+                    posts["next"] = content["next"].split(
+                        "?")[1].replace('account=', 'author=')
+
+                activepagenumber = offset / LIMIT + 1
+
+                posts["activepagenumber"] = int(activepagenumber)
+                posts["prevpagenumber"] = int(activepagenumber - 1)
+
+                if offset + 200 < content.get("count", 0):
+                    posts["nextpagenumber"] = int(activepagenumber + 1)
+
+                posts["results"] = content.get("results", [])
+
+        except requests.exceptions.ConnectionError:
+            posts["content"] = "Connection Error"
+
+        return posts
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['activetransactionhistory'] = False
+        context['activeenrolledhive_sbi'] = False
+        context['activesponsoredhive_sbi'] = False
+
+        context['userinfoform'] = self.get_userinfo_form()
+        context['user'] = self.get_user()
+        context['posts'] = self.get_posts()
+
+        ordering = self.request.GET.get("ordering", "")
+
+        if not ordering:
+            context['createddescendingactive'] = True
+
+        if ordering == "created":
+            context['createdascendingactive'] = True
+        if ordering == "-created":
+            context['createddescendingactive'] = True
+
+        return context
+            
