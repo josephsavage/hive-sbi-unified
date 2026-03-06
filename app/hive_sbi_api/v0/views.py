@@ -66,33 +66,33 @@ class MemberViewSet(RetrieveModelMixin, GenericViewSet):
         return obj
 
     def _get_last_sync_status(self):
-        """
-        Returns a dict compatible with StatusSerializer.
-        Handles empty TaskResult table safely.
-        """
-        try:
-            last_sync = (
-                TaskResult.objects.filter(
-                    task_name="hive_sbi_api.sbi.tasks.sync_members"
-                )
-                .latest("date_done")
+    """
+    Returns a dict compatible with StatusSerializer.
+    Handles empty TaskResult table safely.
+    """
+    try:
+        last_sync = (
+            TaskResult.objects.filter(
+                task_name="hive_sbi_api.sbi.tasks.sync_members"
             )
-            last_updated = last_sync.date_done
-        except TaskResult.DoesNotExist:
-            last_updated = None
+            .latest("date_done")
+        )
+        last_updated = last_sync.date_done
+    except TaskResult.DoesNotExist:
+        last_updated = None
 
-        if last_updated:
-            next_exec = last_updated + timedelta(hours=2, minutes=24)
-            now = timezone.now()
-            waiting_minutes = int((next_exec - now).total_seconds() / 60)
-        else:
-            waiting_minutes = None
+    if last_updated:
+        next_exec = last_updated + timedelta(hours=2, minutes=24)
+        now = timezone.now()
+        waiting_minutes = int((next_exec - now).total_seconds() / 60)
+    else:
+        waiting_minutes = None
 
-        return {
-            "lastUpdatedTime": last_updated,
-            "estimatedMinutesUntilNextUpdate": waiting_minutes,
-            "maxSBIVote": 0,
-        }
+    return {
+        "lastUpdatedTime": last_updated,
+        "estimatedMinutesUntilNextUpdate": waiting_minutes,
+        "maxSBIVote": 0,
+    }
 
     @swagger_auto_schema(tags=["V0"], responses={200: user_response})
     def retrieve(self, request, *args, **kwargs):
