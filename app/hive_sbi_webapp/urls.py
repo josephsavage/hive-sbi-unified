@@ -42,12 +42,6 @@ urlpatterns = [
     ),
 
     path(
-        'richlist/',
-        RichListView.as_view(),
-        name='richlist',
-    ),
-
-    path(
         'transaction-history/',
         TransactionHistory.as_view(),
         name='transaction_history',
