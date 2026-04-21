@@ -27,3 +27,19 @@ The Next Immediate Step: The very first thing I should do when I 'wake up' in th
 **Architectural Decisions:** To prevent future connection issues from Docker, we configured `pg_hba.conf` to authorize the entire default Docker subnet (`172.17.0.0/16`) rather than a single, ephemeral IP address. This makes the local development setup more robust.
 
 **The Next Immediate Step:** Verify all services are running without errors by checking their logs, and then continue with the planned development work.
+
+## Session 2
+**Logic Implemented:** Built the complete ELT pipeline to migrate legacy Steem data from remote MariaDB to PostgreSQL.
+1.  Created a parameterized `pgloader` script (`steem_ops.load`) to mirror the 10 raw `sbi_ops` tables into Postgres.
+2.  Built a new Django `steem` app containing staging (`SteemSbiOpRaw`) and domain (`SteemOpTransfer`, `SteemOpVote`) models.
+3.  Wrote a custom Postgres `RunSQL` migration (`0002_elt_transform_ops.py`) that consolidates the 10 tables and executes fast JSON -> relational data extraction.
+4.  Patched `Dockerfile` to run `dos2unix` on boot scripts, resolving `\r` (CRLF) crash errors.
+5.  Fixed legacy `admin.py` system check errors preventing migrations.
+
+**The 'Hanging Thread':** The local environment is configured with SSH tunneling to test the ELT process. The next goal is to deploy these changes to production where the extraction will run at gigabit speeds, and then sync the resulting transformed tables back to the local database.
+
+**Architectural Decisions:** 
+- Avoided putting staging consolidation logic inside `pgloader` because its parser is overly sensitive to complex SQL options mixed with `LOAD DATABASE`. Instead, we let `pgloader` do a fast, dumb 1:1 table dump, and moved all consolidation (`UNION ALL`) and extraction logic into a robust Postgres native SQL migration.
+- Fully parameterized the `pgloader` script using `.env` variables so it works seamlessly across dev (with SSH tunnels) and bare-metal production without code changes.
+
+**The Next Immediate Step:** Open a PR with the generated `walkthrough.md` deployment instructions, deploy to the production server, execute the pgloader/migration scripts, and confirm data populates successfully.
