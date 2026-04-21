@@ -15,6 +15,7 @@ The migration process is split into two explicit, manual steps to avoid deployme
 ### 2. Data Transformation (Django Management Command)
 *   **Tool:** Django Management Command
 *   **Script:** `app/hive_sbi_api/steem/management/commands/run_steem_elt.py`
+*   **Domain Logic:** `app/hive_sbi_api/steem/domain/elt.py`
 *   **Models Involved:** `SteemSbiOpRaw`, `SteemOpTransfer`, `SteemOpVote` (found in `app/hive_sbi_api/steem/models.py`)
 *   **Action:** Once `pgloader` completes, this command is executed (`python manage.py run_steem_elt`). It calls domain logic (`steem.domain.elt.run_incremental_elt`) wrapped in a transaction to:
     1. Consolidate the 10 raw tables into a single staging table (`steem_sbi_op_raw`) using an incremental high-water mark approach (`MAX(block_num)`), appending only new data.
