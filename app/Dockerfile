@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y msodbcsql17 \
     && apt-get install -y unixodbc-dev \
+    && apt-get install -y dos2unix \
     # Clean up apt cache to keep image size small
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,6 +30,7 @@ RUN pip install --upgrade pip && \
 # Add the rest of the application files
 ADD . /app/
 
+RUN dos2unix /app/boot_scripts/*.sh
 RUN chmod +x /app/boot_scripts/*.sh
 
 # Create the unprivileged user

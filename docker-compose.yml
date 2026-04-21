@@ -34,6 +34,22 @@ services:
     ports:
       - "127.0.0.1:5009:8009"
     restart: unless-stopped
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-SBI_U} -d ${POSTGRES_DB:-SBI_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:alpine
@@ -79,3 +95,4 @@ services:
 volumes:
   webapp_data:
   beat_data:
+  postgres_data:
