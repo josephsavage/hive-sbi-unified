@@ -43,3 +43,19 @@ The Next Immediate Step: The very first thing I should do when I 'wake up' in th
 - Fully parameterized the `pgloader` script using `.env` variables so it works seamlessly across dev (with SSH tunnels) and bare-metal production without code changes.
 
 **The Next Immediate Step:** Open a PR with the generated `walkthrough.md` deployment instructions, deploy to the production server, execute the pgloader/migration scripts, and confirm data populates successfully.
+## Session 3
+**Logic Implemented:** Addressed the 4 critical issues identified in the code review of PR 61 (Steem ELT Pipeline).
+1. Deleted the risky `0002_elt_transform_ops.py` migration and extracted its raw SQL logic into a new, safely triggerable Django management command (`run_steem_elt.py`).
+2. Hardened the raw SQL JSON extraction logic using `COALESCE(CAST(NULLIF(op_dict->>'weight', '') AS INTEGER), 0)` to prevent transaction crashes on legacy records with empty/null weights.
+3. Updated the `docker-compose.yml` `api` service to explicitly wait for `postgres` to become `service_healthy` to eliminate boot race conditions.
+4. Parameterized the target Postgres host in `pgloader_scripts/steem_ops.load` so it dynamically resolves based on `.env` context (WSL native vs. Docker).
+5. Initialized `.github/docs/document_guide.md` and added `.github/docs/steem_elt.md` to establish our new documentation standards.
+6. Merged improved operational rules into `GEMINI.md` to harden the workflow.
+
+**The 'Hanging Thread':** The ELT pipeline is now fully refactored for safety and idempotency. The actual automated integration tests for this pipeline were explicitly deferred due to the infrastructure overhead of mocking MariaDB inside standard test suites.
+
+**Architectural Decisions:** 
+- Moved ELT execution strictly out of Django's automated migration system into a manual command (`run_steem_elt`) because schema migrations should not depend on external data pipelines (`pgloader`) completing first.
+- Decided against writing Python-level tests for `run_steem_elt.py` because testing it correctly requires an end-to-end integration test with a seeded MariaDB container, which is outside the current scope.
+
+**The Next Immediate Step:** Merge PR 61 if ready, or pull down the changes to test the pipeline natively against the remote MariaDB before production deployment.
