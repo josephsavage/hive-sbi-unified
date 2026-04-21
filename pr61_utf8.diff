@@ -1,0 +1,643 @@
+﻿diff --git a/.github/docs/document_guide.md b/.github/docs/document_guide.md
+new file mode 100644
+index 0000000..abeb41c
+--- /dev/null
++++ b/.github/docs/document_guide.md
+@@ -0,0 +1,21 @@
++# Hive SBI Unified Document Guide
++
++This file serves as the master index for all technical and per-module documentation in this repository.
++
++**Crucial Workflow Rule:** Before starting any major task that touches domain behavior, APIs, or data models, you must consult this guide and read the relevant documentation files *before* reading the code. The documentation provides the intended mental model.
++
++## Core Documentation
++
++* **GEMINI.md** - Contains the system instructions, AI workflow guidelines, and collaboration rules. (Maintained in user settings).
++
++## Feature Domains
++
++*(To be filled as we document domain boundaries and business logic)*
++
++## Integrations
++
++* **[steem_elt.md](steem_elt.md)** - Documentation for the pipeline that migrates and transforms legacy Steem operations from MariaDB to PostgreSQL.
++
++## DevOps & Infrastructure
++
++*(To be filled as we document deployment, Docker Compose setups, etc.)*
+diff --git a/.github/docs/gemini_summaries.md b/.github/docs/gemini_summaries.md
+index 2a185b1..06ba6df 100644
+--- a/.github/docs/gemini_summaries.md
++++ b/.github/docs/gemini_summaries.md
+@@ -26,4 +26,52 @@ The Next Immediate Step: The very first thing I should do when I 'wake up' in th
+ 
+ **Architectural Decisions:** To prevent future connection issues from Docker, we configured `pg_hba.conf` to authorize the entire default Docker subnet (`172.17.0.0/16`) rather than a single, ephemeral IP address. This makes the local development setup more robust.
+ 
+-**The Next Immediate Step:** Verify all services are running without errors by checking their logs, and then continue with the planned development work.
+\ No newline at end of file
++**The Next Immediate Step:** Verify all services are running without errors by checking their logs, and then continue with the planned development work.
++
++## Session 2
++**Logic Implemented:** Built the complete ELT pipeline to migrate legacy Steem data from remote MariaDB to PostgreSQL.
++1.  Created a parameterized `pgloader` script (`steem_ops.load`) to mirror the 10 raw `sbi_ops` tables into Postgres.
++2.  Built a new Django `steem` app containing staging (`SteemSbiOpRaw`) and domain (`SteemOpTransfer`, `SteemOpVote`) models.
++3.  Wrote a custom Postgres `RunSQL` migration (`0002_elt_transform_ops.py`) that consolidates the 10 tables and executes fast JSON -> relational data extraction.
++4.  Patched `Dockerfile` to run `dos2unix` on boot scripts, resolving `\r` (CRLF) crash errors.
++5.  Fixed legacy `admin.py` system check errors preventing migrations.
++
++**The 'Hanging Thread':** The local environment is configured with SSH tunneling to test the ELT process. The next goal is to deploy these changes to production where the extraction will run at gigabit speeds, and then sync the resulting transformed tables back to the local database.
++
++**Architectural Decisions:** 
++- Avoided putting staging consolidation logic inside `pgloader` because its parser is overly sensitive to complex SQL options mixed with `LOAD DATABASE`. Instead, we let `pgloader` do a fast, dumb 1:1 table dump, and moved all consolidation (`UNION ALL`) and extraction logic into a robust Postgres native SQL migration.
++- Fully parameterized the `pgloader` script using `.env` variables so it works seamlessly across dev (with SSH tunnels) and bare-metal production without code changes.
++
++**The Next Immediate Step:** Open a PR with the generated `walkthrough.md` deployment instructions, deploy to the production server, execute the pgloader/migration scripts, and confirm data populates successfully.
++## Session 3
++**Logic Implemented:** Addressed the 4 critical issues identified in the code review of PR 61 (Steem ELT Pipeline).
++1. Deleted the risky `0002_elt_transform_ops.py` migration and extracted its raw SQL logic into a new, safely triggerable Django management command (`run_steem_elt.py`).
++2. Hardened the raw SQL JSON extraction logic using `COALESCE(CAST(NULLIF(op_dict->>'weight', '') AS INTEGER), 0)` to prevent transaction crashes on legacy records with empty/null weights.
++3. Updated the `docker-compose.yml` `api` service to explicitly wait for `postgres` to become `service_healthy` to eliminate boot race conditions.
++4. Parameterized the target Postgres host in `pgloader_scripts/steem_ops.load` so it dynamically resolves based on `.env` context (WSL native vs. Docker).
++5. Initialized `.github/docs/document_guide.md` and added `.github/docs/steem_elt.md` to establish our new documentation standards.
++6. Merged improved operational rules into `GEMINI.md` to harden the workflow.
++
++**The 'Hanging Thread':** The ELT pipeline is now fully refactored for safety and idempotency. The actual automated integration tests for this pipeline were explicitly deferred due to the infrastructure overhead of mocking MariaDB inside standard test suites.
++
++**Architectural Decisions:** 
++- Moved ELT execution strictly out of Django's automated migration system into a manual command (`run_steem_elt`) because schema migrations should not depend on external data pipelines (`pgloader`) completing first.
++- Decided against writing Python-level tests for `run_steem_elt.py` because testing it correctly requires an end-to-end integration test with a seeded MariaDB container, which is outside the current scope.
++
++**The Next Immediate Step:** Merge PR 61 if ready, or pull down the changes to test the pipeline natively against the remote MariaDB before production deployment.
++
++## Session 4
++**Logic Implemented:** Critical refactoring of the PR 61 Steem ELT pipeline to align with core architectural rules:
++1.  Extracted ELT SQL execution from the management command into the domain layer (`steem/domain/elt.py`) to satisfy the "Fat Domains" rule.
++2.  Wrapped the execution in `run_steem_elt.py` inside a single `transaction.atomic()` block, shifting database commits safely to the top-level worker.
++3.  Replaced `TRUNCATE` idempotency with a High-Water Mark (`MAX(block_num)`) incremental load approach, allowing the script to run seamlessly on a schedule.
++4.  Created a Django migration adding `block_num` indexes to domain tables for fast incremental lookups.
++5.  Updated `steem_elt.md` to formally document the exception for deferring tests until initial data patterns are analyzed.
++
++**The 'Hanging Thread':** The codebase is now fully compliant with the stricter development pattern introduced in PR 61. The incremental logic is ready to execute either an initial full load or a scheduled delta run.
++
++**Architectural Decisions:** 
++- Chosen a single database transaction for the incremental load instead of application-level batching. Since `INSERT INTO ... SELECT ...` executes entirely inside the Postgres engine, batching in Python is unnecessary and would break atomicity.
++- Deployed a High-Water Mark approach for idempotency to seamlessly support both the initial bulk load and all future scheduled fetches without configuration changes.
++
++**The Next Immediate Step:** Verify that `python manage.py run_steem_elt` correctly runs the incremental pipeline. If it passes successfully against the remote/test data, merge PR 61 and deploy.
+diff --git a/.github/docs/steem_elt.md b/.github/docs/steem_elt.md
+new file mode 100644
+index 0000000..feca116
+--- /dev/null
++++ b/.github/docs/steem_elt.md
+@@ -0,0 +1,26 @@
++# Steem ELT Pipeline
++
++This document describes the Extract, Load, Transform (ELT) pipeline used to migrate legacy Steem operational data from an external MariaDB database into our primary PostgreSQL database.
++
++## Architecture & Workflow
++
++The migration process is split into two explicit, manual steps to avoid deployment bottlenecks and race conditions:
++
++### 1. Data Extraction (MariaDB -> PostgreSQL)
++*   **Tool:** `pgloader`
++*   **Script:** `pgloader_scripts/steem_ops.load`
++*   **Action:** This script connects to the legacy MariaDB and performs a 1:1 raw data dump of the 10 legacy tables (`sbi_ops` through `sbi10_ops`) directly into the `public` schema of the PostgreSQL database.
++*   **Context:** This runs incredibly fast but requires the database host parameters to be correctly mapped in the `.env` file (`POSTGRES_HOST`, `POSTGRES_PORT`).
++
++### 2. Data Transformation (Django Management Command)
++*   **Tool:** Django Management Command
++*   **Script:** `app/hive_sbi_api/steem/management/commands/run_steem_elt.py`
++*   **Domain Logic:** `app/hive_sbi_api/steem/domain/elt.py`
++*   **Models Involved:** `SteemSbiOpRaw`, `SteemOpTransfer`, `SteemOpVote` (found in `app/hive_sbi_api/steem/models.py`)
++*   **Action:** Once `pgloader` completes, this command is executed (`python manage.py run_steem_elt`). It calls domain logic (`steem.domain.elt.run_incremental_elt`) wrapped in a transaction to:
++    1. Consolidate the 10 raw tables into a single staging table (`steem_sbi_op_raw`) using an incremental high-water mark approach (`MAX(block_num)`), appending only new data.
++    2. Extract specific JSON payloads into strongly-typed domain tables (`steem_op_transfer`, `steem_op_vote`) incrementally.
++*   **Safety Features:** Includes `COALESCE(CAST(NULLIF(..., ''))) AS INTEGER` protection to prevent the entire transaction from aborting if a legacy payload contains empty strings where an integer is expected. Executed in a single atomic database transaction to prevent partial loads.
++
++## Testing Strategy
++Integration tests for the initial ELT pipeline load are deliberately deferred. Because the data patterns of the legacy JSON payloads are not fully known until the initial load is complete, mocking the data effectively upfront is impractical. Once the initial load provides the data patterns, regression tests will be built to prevent breaking changes on future releases and ensure the incremental loads remain stable.
+diff --git a/GEMINI.md b/GEMINI.md
+index de321ba..dd9f1de 100644
+--- a/GEMINI.md
++++ b/GEMINI.md
+@@ -3,28 +3,39 @@
+ ## **≡ƒ¢á Core Development Principles**
+ 
+ * **Actual Functions Only:** Always build fully functional code. Do not use placeholders or "smoke and mirrors."  
+-* **Strict TODO Policy:** Only include `# TODO` comments if there is an explicit signoff to defer that specific logic.  
++* **Strict TODO Policy:** Only include `# TODO` comments if there is an explicit signoff to defer that specific logic. Do not smuggle half-finished logic into code as a comment.
+ * **Step-by-Step Deployment:** Break down all technical deployment and programming instructions into sequential steps. Provide context for each step to maximize learning and clarity.  
+ * **Confirmation Protocol:**  
+   1. Propose the approach first.  
+-  2. **Do not** generate code until the approach is confirmed.  
++  2. **Do not** generate code or execute terminal commands until the approach is confirmed. Always explain terminal commands and their risks *before* asking for approval.
+   3. Update only one script or file at a time.  
+   4. Await confirmation before proceeding to the next script.
+ 
++## **≡ƒôû Workflow: Read the Docs Before the Code**
++
++* **Document Guide:** For every task touching domain behavior, APIs, schemas, or data models, open `.github/docs/document_guide.md` first. Read the relevant per-module docs to build your mental model *before* digging into the code. Use the code to validate the mental model, not to construct it.
++* **Change Discipline:** Every non-trivial code change must ship with **both** testing and documentation updates in the same change. Do not treat documentation or tests as follow-up tasks.
++* **Code vs. Documentation Conflicts:** When code and docs disagree, the code is the ground truth. However, when user-provided data (logs, query results, screenshots) contradicts what the docs or code *should* produce, **prioritize observed data over assumed misinterpretation.** The observation is real; find the bug producing it.
++
++## **≡ƒñ¥ Collaboration Style: Support Staff & Learning Partner**
++
++* **Git Workflow (Support Role):** You are support staff. Never disrupt main development. Never use `git merge` to integrate upstream changes; always use `git rebase` to keep history linear. Never force-push to main branches. When resolving conflicts, use an isolated `git worktree`.
++* **Teach the Pattern:** Don't just apply a diff. Explain what the old code was doing wrong, why it was inefficient, and what the new code does differently. Surface the mental model. A one-line fix with a clear explanation is more valuable than a correct fix with no context. Do not rename existing functions or imports.
++
+ ## **≡ƒºá Context & Logic Rules**
+ 
+ * **Assumption Guardrail:** Never make assumptions. Review the full prompt for clues to missing context. If context is missing, ask for it before proceeding.  
+ * **Mathematical Absolute:** When calculating hydration or similar metrics involving balance changes, always use **absolute values** (e.g., treat negative stored expenses as positive for volume calculations).
+-* **Fat Domains, Thin API, Thin workers**: all functional logic should live within domains; routers and workers should only be processing enough to route queries to the right functions. **Critically, `db.commit()` must ONLY occur at the top level (in the router or worker) and NEVER within domain functions.**
+-* **Function Reusabality**: If the same thing needs done in more than one place, build a standard function and call it everywhere that needs the logic. Do not replicate.
++* **Fat Domains, Thin API, Thin workers**: All functional logic should live within domains; routers and workers should only be processing enough to route queries to the right functions. **Critically, `db.commit()` must ONLY occur at the top level (in the router or worker) and NEVER within domain functions.**
++* **Function Reusability**: If the same thing needs done in more than one place, build a standard function and call it everywhere that needs the logic. Do not replicate.
+ 
+ ## **≡ƒÜÇ Environment & Tech Stack**
+ 
+ * **Local Environment:** Windows host using **WSL2** and **Docker Desktop**.  
+ * **Primary Languages:** Python, JavaScript (React.js).  
+-* **Frameworks:** FastAPI, SQLAlchemy.  
++* **Frameworks:** Django, Django REST Framework, Celery.
+ * **Deployment:** Dockerized containers on a VPS, with postgres running on bare metal.
+-* **Project Specifics:** \* **Hive SBI:** A blockchain-based curation program (Hive blockchain). This is the repo for the webapp and its supporting API.
++* **Project Specifics:** **Hive SBI:** A blockchain-based curation program (Hive blockchain). This is the repo for the webapp and its supporting API.
+ 
+ ## **Document Comparison**
+ When instructed to compare old and new versions of something, provide all of the following first, and then request signoff for specific fixes **before** drafting any diff.
+@@ -36,4 +47,4 @@ When instructed to compare old and new versions of something, provide all of the
+ ## **Handover Summaries**
+ 
+ * At the beginning of each session, review the last few "Session Handover Summary" sections for any context relevant to the prompt, keep only that context, and discard the rest.
+-* When I say "Session Handover Summary", read the Instructions at the top of  `.github/docs/gemini_summaries.md and then append a 'Session Handover Summary' with an incremental session ID.
++* When I say "Session Handover Summary", read the Instructions at the top of `.github/docs/gemini_summaries.md` and then append a 'Session Handover Summary' with an incremental session ID.
+diff --git a/app/Dockerfile b/app/Dockerfile
+index 1643c9e..edf683c 100644
+--- a/app/Dockerfile
++++ b/app/Dockerfile
+@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
+     && apt-get update \
+     && ACCEPT_EULA=Y apt-get install -y msodbcsql17 \
+     && apt-get install -y unixodbc-dev \
++    && apt-get install -y dos2unix \
+     # Clean up apt cache to keep image size small
+     && rm -rf /var/lib/apt/lists/*
+ 
+@@ -29,6 +30,7 @@ RUN pip install --upgrade pip && \
+ # Add the rest of the application files
+ ADD . /app/
+ 
++RUN dos2unix /app/boot_scripts/*.sh
+ RUN chmod +x /app/boot_scripts/*.sh
+ 
+ # Create the unprivileged user
+diff --git a/app/hive_sbi_api/core/admin.py b/app/hive_sbi_api/core/admin.py
+index 48523c8..90bc71f 100644
+--- a/app/hive_sbi_api/core/admin.py
++++ b/app/hive_sbi_api/core/admin.py
+@@ -162,7 +162,6 @@ class PostAdmin(admin.ModelAdmin):
+     list_filter = [
+         'created',
+         'empty_votes',
+-        'has_beneficiaries',
+     ]
+ 
+     readonly_fields = [
+@@ -173,10 +172,8 @@ class PostAdmin(admin.ModelAdmin):
+         'vote_rshares',
+         'total_payout_value',
+         'author_rewards',
+-        'active_votes',
+         'total_rshares',
+         'empty_votes',
+-        'beneficiaries',
+         'percent_hbd',
+         'curator_payout_value',
+     ]
+diff --git a/app/hive_sbi_api/settings/base.py b/app/hive_sbi_api/settings/base.py
+index 625f2de..7909b6b 100644
+--- a/app/hive_sbi_api/settings/base.py
++++ b/app/hive_sbi_api/settings/base.py
+@@ -54,6 +54,7 @@ INSTALLED_APPS = [
+     'hive_sbi_api.v1',
+     'hive_sbi_api.sbi',
+     'hive_sbi_api.hivesql',
++    'hive_sbi_api.steem',
+ ]  + INSTALLED_APPS
+ 
+ MIDDLEWARE = [
+diff --git a/app/hive_sbi_api/steem/__init__.py b/app/hive_sbi_api/steem/__init__.py
+new file mode 100644
+index 0000000..8b13789
+--- /dev/null
++++ b/app/hive_sbi_api/steem/__init__.py
+@@ -0,0 +1 @@
++
+diff --git a/app/hive_sbi_api/steem/apps.py b/app/hive_sbi_api/steem/apps.py
+new file mode 100644
+index 0000000..ab67753
+--- /dev/null
++++ b/app/hive_sbi_api/steem/apps.py
+@@ -0,0 +1,6 @@
++from django.apps import AppConfig
++
++
++class SteemConfig(AppConfig):
++    default_auto_field = 'django.db.models.BigAutoField'
++    name = 'hive_sbi_api.steem'
+diff --git a/app/hive_sbi_api/steem/domain/__init__.py b/app/hive_sbi_api/steem/domain/__init__.py
+new file mode 100644
+index 0000000..a958221
+--- /dev/null
++++ b/app/hive_sbi_api/steem/domain/__init__.py
+@@ -0,0 +1 @@
++# domain package
+diff --git a/app/hive_sbi_api/steem/domain/elt.py b/app/hive_sbi_api/steem/domain/elt.py
+new file mode 100644
+index 0000000..306b7d6
+--- /dev/null
++++ b/app/hive_sbi_api/steem/domain/elt.py
+@@ -0,0 +1,80 @@
++def run_incremental_elt(cursor):
++    """
++    Executes the incremental ELT pipeline for Steem operations using High-Water Marks.
++    This must be called within an active transaction block.
++    """
++    # 1. Staging Table: Consolidate raw data incrementally
++    cursor.execute("""
++        INSERT INTO steem_sbi_op_raw (op_acc_name, block_num, timestamp, op_type, op_dict)
++        SELECT 'sbi', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi'), 0)
++        UNION ALL 
++        SELECT 'sbi2', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi2_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi2'), 0)
++        UNION ALL 
++        SELECT 'sbi3', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi3_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi3'), 0)
++        UNION ALL 
++        SELECT 'sbi4', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi4_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi4'), 0)
++        UNION ALL 
++        SELECT 'sbi5', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi5_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi5'), 0)
++        UNION ALL 
++        SELECT 'sbi6', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi6_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi6'), 0)
++        UNION ALL 
++        SELECT 'sbi7', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi7_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi7'), 0)
++        UNION ALL 
++        SELECT 'sbi8', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi8_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi8'), 0)
++        UNION ALL 
++        SELECT 'sbi9', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi9_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi9'), 0)
++        UNION ALL 
++        SELECT 'sbi10', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
++        FROM sbi10_ops 
++        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi10'), 0);
++    """)
++    
++    # 2. Domain Table: Transfer operations
++    cursor.execute("""
++        INSERT INTO steem_op_transfer (op_acc_name, block_num, timestamp, sender, receiver, amount, memo)
++        SELECT 
++            op_acc_name,
++            block_num,
++            timestamp,
++            op_dict->>'from',
++            op_dict->>'to',
++            op_dict->>'amount',
++            op_dict->>'memo'
++        FROM steem_sbi_op_raw
++        WHERE op_type = 'transfer'
++          AND block_num > COALESCE((SELECT MAX(block_num) FROM steem_op_transfer), 0);
++    """)
++    
++    # 3. Domain Table: Vote operations
++    cursor.execute("""
++        INSERT INTO steem_op_vote (op_acc_name, block_num, timestamp, voter, author, permlink, weight)
++        SELECT 
++            op_acc_name,
++            block_num,
++            timestamp,
++            op_dict->>'voter',
++            op_dict->>'author',
++            op_dict->>'permlink',
++            COALESCE(CAST(NULLIF(op_dict->>'weight', '') AS INTEGER), 0)
++        FROM steem_sbi_op_raw
++        WHERE op_type = 'vote'
++          AND block_num > COALESCE((SELECT MAX(block_num) FROM steem_op_vote), 0);
++    """)
+diff --git a/app/hive_sbi_api/steem/management/__init__.py b/app/hive_sbi_api/steem/management/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/app/hive_sbi_api/steem/management/commands/__init__.py b/app/hive_sbi_api/steem/management/commands/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/app/hive_sbi_api/steem/management/commands/run_steem_elt.py b/app/hive_sbi_api/steem/management/commands/run_steem_elt.py
+new file mode 100644
+index 0000000..79b693b
+--- /dev/null
++++ b/app/hive_sbi_api/steem/management/commands/run_steem_elt.py
+@@ -0,0 +1,18 @@
++from django.core.management.base import BaseCommand
++from django.db import connection, transaction
++from hive_sbi_api.steem.domain.elt import run_incremental_elt
++
++class Command(BaseCommand):
++    help = 'Runs the incremental ELT pipeline for Steem operations'
++
++    def handle(self, *args, **options):
++        self.stdout.write(self.style.NOTICE('Starting incremental Steem ELT pipeline...'))
++        
++        try:
++            with transaction.atomic():
++                with connection.cursor() as cursor:
++                    run_incremental_elt(cursor)
++            self.stdout.write(self.style.SUCCESS('Successfully completed incremental Steem ELT pipeline'))
++        except Exception as e:
++            self.stdout.write(self.style.ERROR(f'Failed to execute Steem ELT pipeline: {str(e)}'))
++            raise
+diff --git a/app/hive_sbi_api/steem/migrations/0001_initial.py b/app/hive_sbi_api/steem/migrations/0001_initial.py
+new file mode 100644
+index 0000000..d7e5ae3
+--- /dev/null
++++ b/app/hive_sbi_api/steem/migrations/0001_initial.py
+@@ -0,0 +1,69 @@
++from django.db import migrations, models
++
++class Migration(migrations.Migration):
++
++    initial = True
++
++    dependencies = []
++
++    operations = [
++        migrations.CreateModel(
++            name='SteemSbiOpRaw',
++            fields=[
++                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
++                ('op_acc_name', models.CharField(db_index=True, help_text='The account name to differentiate the 10 source tables (e.g., sbi, sbi2)', max_length=50)),
++                ('block_num', models.BigIntegerField()),
++                ('timestamp', models.DateTimeField()),
++                ('op_type', models.CharField(db_index=True, max_length=50)),
++                ('op_dict', models.JSONField(help_text='The raw operation payload stored as JSONB')),
++            ],
++            options={
++                'verbose_name': 'Steem SBI Raw Operation',
++                'verbose_name_plural': 'Steem SBI Raw Operations',
++                'db_table': 'steem_sbi_op_raw',
++                'ordering': ['-timestamp'],
++            },
++        ),
++        migrations.CreateModel(
++            name='SteemOpTransfer',
++            fields=[
++                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
++                ('op_acc_name', models.CharField(db_index=True, max_length=50)),
++                ('block_num', models.BigIntegerField()),
++                ('timestamp', models.DateTimeField()),
++                ('sender', models.CharField(max_length=50)),
++                ('receiver', models.CharField(max_length=50)),
++                ('amount', models.CharField(max_length=50)),
++                ('memo', models.TextField(blank=True, null=True)),
++            ],
++            options={
++                'db_table': 'steem_op_transfer',
++                'ordering': ['-timestamp'],
++            },
++        ),
++        migrations.CreateModel(
++            name='SteemOpVote',
++            fields=[
++                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
++                ('op_acc_name', models.CharField(db_index=True, max_length=50)),
++                ('block_num', models.BigIntegerField()),
++                ('timestamp', models.DateTimeField()),
++                ('voter', models.CharField(max_length=50)),
++                ('author', models.CharField(max_length=50)),
++                ('permlink', models.CharField(max_length=512)),
++                ('weight', models.IntegerField()),
++            ],
++            options={
++                'db_table': 'steem_op_vote',
++                'ordering': ['-timestamp'],
++            },
++        ),
++        migrations.AddIndex(
++            model_name='steemsbiopraw',
++            index=models.Index(fields=['op_acc_name'], name='steem_op_acc_idx'),
++        ),
++        migrations.AddIndex(
++            model_name='steemsbiopraw',
++            index=models.Index(fields=['block_num'], name='steem_block_num_idx'),
++        ),
++    ]
+diff --git a/app/hive_sbi_api/steem/migrations/0002_add_block_num_indexes.py b/app/hive_sbi_api/steem/migrations/0002_add_block_num_indexes.py
+new file mode 100644
+index 0000000..cd0c4f4
+--- /dev/null
++++ b/app/hive_sbi_api/steem/migrations/0002_add_block_num_indexes.py
+@@ -0,0 +1,19 @@
++# Generated manually
++from django.db import migrations, models
++
++class Migration(migrations.Migration):
++
++    dependencies = [
++        ('steem', '0001_initial'),
++    ]
++
++    operations = [
++        migrations.AddIndex(
++            model_name='steemoptransfer',
++            index=models.Index(fields=['block_num'], name='steem_transf_block_idx'),
++        ),
++        migrations.AddIndex(
++            model_name='steemopvote',
++            index=models.Index(fields=['block_num'], name='steem_vote_block_idx'),
++        ),
++    ]
+diff --git a/app/hive_sbi_api/steem/migrations/__init__.py b/app/hive_sbi_api/steem/migrations/__init__.py
+new file mode 100644
+index 0000000..143f486
+--- /dev/null
++++ b/app/hive_sbi_api/steem/migrations/__init__.py
+@@ -0,0 +1 @@
++# __init__.py
+diff --git a/app/hive_sbi_api/steem/models.py b/app/hive_sbi_api/steem/models.py
+new file mode 100644
+index 0000000..d9b4fb2
+--- /dev/null
++++ b/app/hive_sbi_api/steem/models.py
+@@ -0,0 +1,79 @@
++from django.db import models
++from django.utils.translation import gettext_lazy as _
++
++class SteemSbiOpRaw(models.Model):
++    """
++    Staging table for raw operations extracted from the legacy MariaDB database.
++    This consolidates the 10 legacy sbi_ops tables.
++    """
++    op_acc_name = models.CharField(
++        max_length=50,
++        help_text=_("The account name to differentiate the 10 source tables (e.g., sbi, sbi2)"),
++    )
++    block_num = models.BigIntegerField()
++    timestamp = models.DateTimeField()
++    op_type = models.CharField(max_length=50, db_index=True)
++    op_dict = models.JSONField(
++        help_text=_("The raw operation payload stored as JSONB"),
++    )
++
++    class Meta:
++        db_table = 'steem_sbi_op_raw'
++        verbose_name = 'Steem SBI Raw Operation'
++        verbose_name_plural = 'Steem SBI Raw Operations'
++        ordering = ['-timestamp']
++        indexes = [
++            models.Index(fields=['op_acc_name']),
++            models.Index(fields=['block_num']),
++        ]
++
++    def __str__(self):
++        return f"{self.op_acc_name} - {self.op_type} - {self.block_num}"
++
++class SteemOpTransfer(models.Model):
++    """
++    Transformed domain model for 'transfer' operations.
++    """
++    op_acc_name = models.CharField(max_length=50, db_index=True)
++    block_num = models.BigIntegerField()
++    timestamp = models.DateTimeField()
++    
++    sender = models.CharField(max_length=50) # Maps to json 'from'
++    receiver = models.CharField(max_length=50) # Maps to json 'to'
++    amount = models.CharField(max_length=50)
++    memo = models.TextField(blank=True, null=True)
++
++    class Meta:
++        db_table = 'steem_op_transfer'
++        ordering = ['-timestamp']
++        indexes = [
++            models.Index(fields=['block_num'], name='steem_transf_block_idx'),
++        ]
++
++
++    def __str__(self):
++        return f"Transfer {self.amount} from {self.sender} to {self.receiver}"
++
++class SteemOpVote(models.Model):
++    """
++    Transformed domain model for 'vote' operations.
++    """
++    op_acc_name = models.CharField(max_length=50, db_index=True)
++    block_num = models.BigIntegerField()
++    timestamp = models.DateTimeField()
++    
++    voter = models.CharField(max_length=50)
++    author = models.CharField(max_length=50)
++    permlink = models.CharField(max_length=512)
++    weight = models.IntegerField()
++
++    class Meta:
++        db_table = 'steem_op_vote'
++        ordering = ['-timestamp']
++        indexes = [
++            models.Index(fields=['block_num'], name='steem_vote_block_idx'),
++        ]
++
++
++    def __str__(self):
++        return f"Vote {self.weight} by {self.voter} on {self.author}/{self.permlink}"
+diff --git a/docker-compose.yml b/docker-compose.yml
+index a964e50..f746f3c 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -34,6 +34,23 @@ services:
+     ports:
+       - "127.0.0.1:5009:8009"
+     restart: unless-stopped
++    depends_on:
++      postgres:
++        condition: service_healthy
++
++  postgres:
++    image: postgres:14-alpine
++    restart: unless-stopped
++    env_file: .env
++    ports:
++      - "127.0.0.1:5434:5432"
++    volumes:
++      - postgres_data:/var/lib/postgresql/data
++    healthcheck:
++      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-SBI_U} -d ${POSTGRES_DB:-SBI_DB}"]
++      interval: 5s
++      timeout: 5s
++      retries: 5
+ 
+   redis:
+     image: redis:alpine
+@@ -79,3 +96,4 @@ services:
+ volumes:
+   webapp_data:
+   beat_data:
++  postgres_data:
+diff --git a/env.template b/env.template
+index 468498a..c5fa73d 100644
+--- a/env.template
++++ b/env.template
+@@ -11,7 +11,16 @@ POSTGRES_HOST=host.docker.internal
+ POSTGRES_PORT=5434
+ POSTGRES_PASSWORD=XXXpasswordXXX
+ 
+-# --- External MariaDB Database (for legacy data sync) ---
++# --- External STEEM MariaDB Database (for legacy data sync) ---
++STEEM_SBI_DB_NAME=sbi
++STEEM_SBI_DB_USER=rishi556
++STEEM_SBI_DB_PASSWORD=XXXpasswordXXX
++STEEM_SBI_DB_HOST=host.docker.internal
++STEEM_SBI_DB_PORT=3307
++STEEM_SBI_STEEM_OPS_DB=sbi_steem_ops
++
++
++# --- External HIVE MariaDB Database (for legacy data sync) ---
+ SBI_DB_NAME=sbi
+ SBI_DB_USER=rishi556
+ SBI_DB_PASSWORD=XXXpasswordXXX
+diff --git a/pgloader_scripts/steem_ops.load b/pgloader_scripts/steem_ops.load
+new file mode 100644
+index 0000000..1378d67
+--- /dev/null
++++ b/pgloader_scripts/steem_ops.load
+@@ -0,0 +1,15 @@
++LOAD DATABASE
++  FROM      mysql://${STEEM_SBI_DB_USER}:${STEEM_SBI_DB_PASSWORD}@${STEEM_SBI_DB_HOST}:${STEEM_SBI_DB_PORT}/${STEEM_SBI_STEEM_OPS_DB}
++  INTO postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
++
++INCLUDING ONLY TABLE NAMES MATCHING ~/sbi[0-9]*_ops/
++
++WITH include drop, create tables, create indexes, preserve index names, no foreign keys,
++     workers = 4, concurrency = 2,
++     multiple readers per thread, rows per range = 50000
++
++CAST type datetime to timestamp drop default drop not null using zero-dates-to-null,
++     type date drop not null drop default using zero-dates-to-null
++
++ALTER SCHEMA 'sbi_steem_ops' RENAME TO 'public'
++;
+diff --git a/pr61.diff b/pr61.diff
+new file mode 100644
+index 0000000..9dba72a
+Binary files /dev/null and b/pr61.diff differ

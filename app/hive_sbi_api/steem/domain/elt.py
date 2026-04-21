@@ -51,30 +51,30 @@ def run_incremental_elt(cursor):
     cursor.execute("""
         INSERT INTO steem_op_transfer (op_acc_name, block_num, timestamp, sender, receiver, amount, memo)
         SELECT 
-            op_acc_name,
-            block_num,
-            timestamp,
-            op_dict->>'from',
-            op_dict->>'to',
-            op_dict->>'amount',
-            op_dict->>'memo'
-        FROM steem_sbi_op_raw
-        WHERE op_type = 'transfer'
-          AND block_num > COALESCE((SELECT MAX(block_num) FROM steem_op_transfer), 0);
+            r.op_acc_name,
+            r.block_num,
+            r.timestamp,
+            r.op_dict->>'from',
+            r.op_dict->>'to',
+            r.op_dict->>'amount',
+            r.op_dict->>'memo'
+        FROM steem_sbi_op_raw r
+        WHERE r.op_type = 'transfer'
+          AND r.block_num > COALESCE((SELECT MAX(t.block_num) FROM steem_op_transfer t WHERE t.op_acc_name = r.op_acc_name), 0);
     """)
     
     # 3. Domain Table: Vote operations
     cursor.execute("""
         INSERT INTO steem_op_vote (op_acc_name, block_num, timestamp, voter, author, permlink, weight)
         SELECT 
-            op_acc_name,
-            block_num,
-            timestamp,
-            op_dict->>'voter',
-            op_dict->>'author',
-            op_dict->>'permlink',
-            COALESCE(CAST(NULLIF(op_dict->>'weight', '') AS INTEGER), 0)
-        FROM steem_sbi_op_raw
-        WHERE op_type = 'vote'
-          AND block_num > COALESCE((SELECT MAX(block_num) FROM steem_op_vote), 0);
+            r.op_acc_name,
+            r.block_num,
+            r.timestamp,
+            r.op_dict->>'voter',
+            r.op_dict->>'author',
+            r.op_dict->>'permlink',
+            COALESCE(CAST(NULLIF(r.op_dict->>'weight', '') AS INTEGER), 0)
+        FROM steem_sbi_op_raw r
+        WHERE r.op_type = 'vote'
+          AND r.block_num > COALESCE((SELECT MAX(v.block_num) FROM steem_op_vote v WHERE v.op_acc_name = r.op_acc_name), 0);
     """)

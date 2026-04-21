@@ -10,10 +10,10 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddIndex(
             model_name='steemoptransfer',
-            index=models.Index(fields=['block_num'], name='steem_transf_block_idx'),
+            index=models.Index(fields=['op_acc_name', 'block_num'], name='steem_transf_acc_block_idx'),
         ),
         migrations.AddIndex(
             model_name='steemopvote',
-            index=models.Index(fields=['block_num'], name='steem_vote_block_idx'),
+            index=models.Index(fields=['op_acc_name', 'block_num'], name='steem_vote_acc_block_idx'),
         ),
     ]

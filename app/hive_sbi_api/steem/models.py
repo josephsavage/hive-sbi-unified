@@ -47,7 +47,7 @@ class SteemOpTransfer(models.Model):
         db_table = 'steem_op_transfer'
         ordering = ['-timestamp']
         indexes = [
-            models.Index(fields=['block_num'], name='steem_transf_block_idx'),
+            models.Index(fields=['op_acc_name', 'block_num'], name='steem_transf_acc_block_idx'),
         ]
 
 
@@ -71,7 +71,7 @@ class SteemOpVote(models.Model):
         db_table = 'steem_op_vote'
         ordering = ['-timestamp']
         indexes = [
-            models.Index(fields=['block_num'], name='steem_vote_block_idx'),
+            models.Index(fields=['op_acc_name', 'block_num'], name='steem_vote_acc_block_idx'),
         ]
 
 
