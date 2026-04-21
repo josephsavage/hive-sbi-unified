@@ -46,6 +46,10 @@ class SteemOpTransfer(models.Model):
     class Meta:
         db_table = 'steem_op_transfer'
         ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['block_num'], name='steem_transf_block_idx'),
+        ]
+
 
     def __str__(self):
         return f"Transfer {self.amount} from {self.sender} to {self.receiver}"
@@ -66,6 +70,10 @@ class SteemOpVote(models.Model):
     class Meta:
         db_table = 'steem_op_vote'
         ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['block_num'], name='steem_vote_block_idx'),
+        ]
+
 
     def __str__(self):
         return f"Vote {self.weight} by {self.voter} on {self.author}/{self.permlink}"

@@ -1,62 +1,18 @@
 from django.core.management.base import BaseCommand
-from django.db import connection
+from django.db import connection, transaction
+from hive_sbi_api.steem.domain.elt import run_incremental_elt
 
 class Command(BaseCommand):
-    help = 'Runs the ELT pipeline for Steem operations'
+    help = 'Runs the incremental ELT pipeline for Steem operations'
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.NOTICE('Starting Steem ELT pipeline...'))
+        self.stdout.write(self.style.NOTICE('Starting incremental Steem ELT pipeline...'))
         
-        with connection.cursor() as cursor:
-            self.stdout.write('Loading steem_sbi_op_raw...')
-            cursor.execute("""
-                TRUNCATE TABLE steem_sbi_op_raw;
-                
-                INSERT INTO steem_sbi_op_raw (op_acc_name, block_num, timestamp, op_type, op_dict)
-                SELECT 'sbi', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi_ops
-                UNION ALL SELECT 'sbi2', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi2_ops
-                UNION ALL SELECT 'sbi3', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi3_ops
-                UNION ALL SELECT 'sbi4', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi4_ops
-                UNION ALL SELECT 'sbi5', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi5_ops
-                UNION ALL SELECT 'sbi6', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi6_ops
-                UNION ALL SELECT 'sbi7', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi7_ops
-                UNION ALL SELECT 'sbi8', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi8_ops
-                UNION ALL SELECT 'sbi9', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi9_ops
-                UNION ALL SELECT 'sbi10', block_num, timestamp, op_type, CAST(op_dict AS JSONB) FROM sbi10_ops;
-            """)
-            
-            self.stdout.write('Loading steem_op_transfer...')
-            cursor.execute("""
-                TRUNCATE TABLE steem_op_transfer;
-                
-                INSERT INTO steem_op_transfer (op_acc_name, block_num, timestamp, sender, receiver, amount, memo)
-                SELECT 
-                    op_acc_name,
-                    block_num,
-                    timestamp,
-                    op_dict->>'from',
-                    op_dict->>'to',
-                    op_dict->>'amount',
-                    op_dict->>'memo'
-                FROM steem_sbi_op_raw
-                WHERE op_type = 'transfer';
-            """)
-            
-            self.stdout.write('Loading steem_op_vote...')
-            cursor.execute("""
-                TRUNCATE TABLE steem_op_vote;
-                
-                INSERT INTO steem_op_vote (op_acc_name, block_num, timestamp, voter, author, permlink, weight)
-                SELECT 
-                    op_acc_name,
-                    block_num,
-                    timestamp,
-                    op_dict->>'voter',
-                    op_dict->>'author',
-                    op_dict->>'permlink',
-                    COALESCE(CAST(NULLIF(op_dict->>'weight', '') AS INTEGER), 0)
-                FROM steem_sbi_op_raw
-                WHERE op_type = 'vote';
-            """)
-
-        self.stdout.write(self.style.SUCCESS('Successfully completed Steem ELT pipeline'))
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    run_incremental_elt(cursor)
+            self.stdout.write(self.style.SUCCESS('Successfully completed incremental Steem ELT pipeline'))
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'Failed to execute Steem ELT pipeline: {str(e)}'))
+            raise
