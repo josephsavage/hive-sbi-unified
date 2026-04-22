@@ -95,3 +95,53 @@ def run_incremental_elt(cursor):
           AND LENGTH(COALESCE(r.op_dict->>'author', '')) <= 16
           AND LENGTH(COALESCE(r.op_dict->>'permlink', '')) <= 256;
     """)
+    
+    # 4. Domain Table: Claim Reward Balance operations
+    cursor.execute("""
+        WITH claim_hwm AS (
+            SELECT h.op_acc_name, COALESCE((
+                SELECT MAX(block_num) FROM steem_op_claim_reward_balance t WHERE t.op_acc_name = h.op_acc_name
+            ), 0) as max_block_num
+            FROM (VALUES ('sbi'), ('sbi2'), ('sbi3'), ('sbi4'), ('sbi5'), ('sbi6'), ('sbi7'), ('sbi8'), ('sbi9'), ('sbi10')) AS h(op_acc_name)
+        )
+        INSERT INTO steem_op_claim_reward_balance (op_acc_name, block_num, timestamp, reward_steem, reward_sbd, reward_vests)
+        SELECT 
+            r.op_acc_name,
+            r.block_num,
+            r.timestamp,
+            
+            -- STEEM Reward
+            COALESCE(
+                CASE 
+                    WHEN jsonb_typeof(r.op_dict->'reward_steem') = 'object' 
+                    THEN (r.op_dict->'reward_steem'->>'amount')::NUMERIC / POWER(10, (r.op_dict->'reward_steem'->>'precision')::NUMERIC)
+                    WHEN jsonb_typeof(r.op_dict->'reward_steem') = 'string' 
+                    THEN SPLIT_PART(r.op_dict->>'reward_steem', ' ', 1)::NUMERIC
+                    ELSE 0 
+                END, 0),
+                
+            -- SBD Reward
+            COALESCE(
+                CASE 
+                    WHEN jsonb_typeof(r.op_dict->'reward_sbd') = 'object' 
+                    THEN (r.op_dict->'reward_sbd'->>'amount')::NUMERIC / POWER(10, (r.op_dict->'reward_sbd'->>'precision')::NUMERIC)
+                    WHEN jsonb_typeof(r.op_dict->'reward_sbd') = 'string' 
+                    THEN SPLIT_PART(r.op_dict->>'reward_sbd', ' ', 1)::NUMERIC
+                    ELSE 0 
+                END, 0),
+                
+            -- VESTS Reward
+            COALESCE(
+                CASE 
+                    WHEN jsonb_typeof(r.op_dict->'reward_vests') = 'object' 
+                    THEN (r.op_dict->'reward_vests'->>'amount')::NUMERIC / POWER(10, (r.op_dict->'reward_vests'->>'precision')::NUMERIC)
+                    WHEN jsonb_typeof(r.op_dict->'reward_vests') = 'string' 
+                    THEN SPLIT_PART(r.op_dict->>'reward_vests', ' ', 1)::NUMERIC
+                    ELSE 0 
+                END, 0)
+                
+        FROM steem_sbi_op_raw r
+        LEFT JOIN claim_hwm hwm ON r.op_acc_name = hwm.op_acc_name
+        WHERE r.op_type = 'claim_reward_balance'
+          AND r.block_num > COALESCE(hwm.max_block_num, 0);
+    """)
