@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'hive_sbi_api.v1',
     'hive_sbi_api.sbi',
     'hive_sbi_api.hivesql',
+    'hive_sbi_api.steem',
 ]  + INSTALLED_APPS
 
 MIDDLEWARE = [
