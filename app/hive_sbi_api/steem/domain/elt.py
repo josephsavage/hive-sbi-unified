@@ -3,51 +3,31 @@ def run_incremental_elt(cursor):
     Executes the incremental ELT pipeline for Steem operations using High-Water Marks.
     This must be called within an active transaction block.
     """
-    # 1. Staging Table: Consolidate raw data incrementally
-    cursor.execute("""
-        INSERT INTO steem_sbi_op_raw (op_acc_name, block_num, timestamp, op_type, op_dict)
-        SELECT 'sbi', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi'), 0)
-        UNION ALL 
-        SELECT 'sbi2', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi2_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi2'), 0)
-        UNION ALL 
-        SELECT 'sbi3', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi3_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi3'), 0)
-        UNION ALL 
-        SELECT 'sbi4', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi4_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi4'), 0)
-        UNION ALL 
-        SELECT 'sbi5', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi5_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi5'), 0)
-        UNION ALL 
-        SELECT 'sbi6', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi6_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi6'), 0)
-        UNION ALL 
-        SELECT 'sbi7', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi7_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi7'), 0)
-        UNION ALL 
-        SELECT 'sbi8', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi8_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi8'), 0)
-        UNION ALL 
-        SELECT 'sbi9', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi9_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi9'), 0)
-        UNION ALL 
-        SELECT 'sbi10', block_num, timestamp, op_type, CAST(op_dict AS JSONB) 
-        FROM sbi10_ops 
-        WHERE block_num > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = 'sbi10'), 0);
-    """)
     
-    # 2. Domain Table: Transfer operations
+    # 1. Staging Table: Consolidate raw data incrementally with corrected column mapping
+    # Legacy 'block' -> 'block_num'
+    # Legacy 'type'  -> 'op_type'
+    source_tables = [f"sbi{i}_ops" if i > 1 else "sbi_ops" for i in range(1, 11)]
+    
+    fragments = []
+    for table in source_tables:
+        # Match the hardcoded label logic from your original script
+        label = table.replace("_ops", "")
+        
+        fragments.append(f"""
+            SELECT '{label}', block, timestamp, type, CAST(op_dict AS JSONB) 
+            FROM {table} 
+            WHERE block > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = '{label}'), 0)
+        """)
+
+    union_all_query = f"""
+        INSERT INTO steem_sbi_op_raw (op_acc_name, block_num, timestamp, op_type, op_dict)
+        {" UNION ALL ".join(fragments)}
+    """
+    
+    cursor.execute(union_all_query)
+    
+    # 2. Domain Table: Transfer operations (References clean staging table)
     cursor.execute("""
         WITH transfer_hwm AS (
             SELECT h.op_acc_name, COALESCE((
@@ -70,7 +50,7 @@ def run_incremental_elt(cursor):
           AND r.block_num > COALESCE(hwm.max_block_num, 0);
     """)
     
-    # 3. Domain Table: Vote operations
+    # 3. Domain Table: Vote operations (References clean staging table)
     cursor.execute("""
         WITH vote_hwm AS (
             SELECT h.op_acc_name, COALESCE((
