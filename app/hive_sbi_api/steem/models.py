@@ -39,7 +39,7 @@ class SteemOpTransfer(models.Model):
     
     sender = models.CharField(max_length=50) # Maps to json 'from'
     receiver = models.CharField(max_length=50) # Maps to json 'to'
-    amount = models.CharField(max_length=50)
+    amount = models.CharField(max_length=56)
     memo = models.TextField(blank=True, null=True)
 
     class Meta:
