@@ -90,3 +90,17 @@ The Next Immediate Step: The very first thing I should do when I 'wake up' in th
 - Deployed a composite index (`op_acc_name`, `block_num`) to ensure the new partitioned subquery doesn't trigger O(N) full-table scans.
 
 **The Next Immediate Step:** Run the full pipeline test in the local environment and, if successful, merge PR 61.
+
+## Session 6
+**Logic Implemented:** Addressed critical performance issues found during the PR 61 code review.
+1. Replaced single-column indexes on `SteemSbiOpRaw` with a composite index (`op_acc_name`, `block_num`) in `models.py` to optimize staging table high-water mark queries.
+2. Updated the manual `0002_add_block_num_indexes.py` migration to safely `RemoveIndex` the old single-column indexes and `AddIndex` the new staging composite index.
+3. Refactored the O(N) correlated subqueries inside `app/hive_sbi_api/steem/domain/elt.py` into performant Common Table Expressions (CTEs) for `steem_op_transfer` and `steem_op_vote` inserts.
+
+**The 'Hanging Thread':** The codebase for PR 61 is now fully optimized, documented, and reviewed. The code is ready for final integration.
+
+**Architectural Decisions:** 
+- Addressed the correlated subquery performance risk by adopting CTEs. This ensures the database evaluates the high-water marks for the 10 legacy accounts exactly once per run instead of once per extracted row.
+- Ensured the composite indexing strategy is applied symmetrically across both the staging and domain tables to guarantee index-only scans during delta extractions.
+
+**The Next Immediate Step:** Merge PR 61 into the main branch, deploy to the production server, and execute the initial bulk data load.

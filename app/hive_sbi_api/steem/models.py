@@ -23,8 +23,7 @@ class SteemSbiOpRaw(models.Model):
         verbose_name_plural = 'Steem SBI Raw Operations'
         ordering = ['-timestamp']
         indexes = [
-            models.Index(fields=['op_acc_name']),
-            models.Index(fields=['block_num']),
+            models.Index(fields=['op_acc_name', 'block_num'], name='steem_raw_acc_block_idx'),
         ]
 
     def __str__(self):

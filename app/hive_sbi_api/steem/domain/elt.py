@@ -49,6 +49,11 @@ def run_incremental_elt(cursor):
     
     # 2. Domain Table: Transfer operations
     cursor.execute("""
+        WITH transfer_hwm AS (
+            SELECT op_acc_name, COALESCE(MAX(block_num), 0) as max_block_num
+            FROM steem_op_transfer
+            GROUP BY op_acc_name
+        )
         INSERT INTO steem_op_transfer (op_acc_name, block_num, timestamp, sender, receiver, amount, memo)
         SELECT 
             r.op_acc_name,
@@ -59,12 +64,18 @@ def run_incremental_elt(cursor):
             r.op_dict->>'amount',
             r.op_dict->>'memo'
         FROM steem_sbi_op_raw r
+        LEFT JOIN transfer_hwm hwm ON r.op_acc_name = hwm.op_acc_name
         WHERE r.op_type = 'transfer'
-          AND r.block_num > COALESCE((SELECT MAX(t.block_num) FROM steem_op_transfer t WHERE t.op_acc_name = r.op_acc_name), 0);
+          AND r.block_num > COALESCE(hwm.max_block_num, 0);
     """)
     
     # 3. Domain Table: Vote operations
     cursor.execute("""
+        WITH vote_hwm AS (
+            SELECT op_acc_name, COALESCE(MAX(block_num), 0) as max_block_num
+            FROM steem_op_vote
+            GROUP BY op_acc_name
+        )
         INSERT INTO steem_op_vote (op_acc_name, block_num, timestamp, voter, author, permlink, weight)
         SELECT 
             r.op_acc_name,
@@ -75,6 +86,7 @@ def run_incremental_elt(cursor):
             r.op_dict->>'permlink',
             COALESCE(CAST(NULLIF(r.op_dict->>'weight', '') AS INTEGER), 0)
         FROM steem_sbi_op_raw r
+        LEFT JOIN vote_hwm hwm ON r.op_acc_name = hwm.op_acc_name
         WHERE r.op_type = 'vote'
-          AND r.block_num > COALESCE((SELECT MAX(v.block_num) FROM steem_op_vote v WHERE v.op_acc_name = r.op_acc_name), 0);
+          AND r.block_num > COALESCE(hwm.max_block_num, 0);
     """)
