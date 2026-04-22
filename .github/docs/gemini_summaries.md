@@ -104,3 +104,18 @@ The Next Immediate Step: The very first thing I should do when I 'wake up' in th
 - Ensured the composite indexing strategy is applied symmetrically across both the staging and domain tables to guarantee index-only scans during delta extractions.
 
 **The Next Immediate Step:** Merge PR 61 into the main branch, deploy to the production server, and execute the initial bulk data load.
+
+## Session 7
+**Logic Implemented:** Applied critical fixes discovered during the final code review of PR 61.
+1. Removed redundant `db_index=True` single-column indexes from `op_acc_name` in `SteemOpTransfer` and `SteemOpVote` models to optimize inserts and save disk space.
+2. Appended `migrations.AlterField` statements to the manually generated `0002_add_block_num_indexes.py` to ensure Django fully drops the legacy implicit indexes from PostgreSQL.
+3. Refactored the `transfer_hwm` and `vote_hwm` CTEs in `steem/domain/elt.py`. Replaced the O(M) `GROUP BY` logic with highly performant O(1) `VALUES` lateral subqueries to guarantee exactly 10 index-only lookups per execution.
+4. Updated `.github/docs/steem_elt.md` to explicitly document the architectural shift to `VALUES` lateral subqueries and strict composite indexing.
+
+**The 'Hanging Thread':** All final review issues and performance blockers have been resolved and documented. PR 61 is fully optimized and ready for deployment.
+
+**Architectural Decisions:** 
+- Explicitly defined the 10 legacy accounts via a `VALUES` subquery in the high-water mark CTEs. PostgreSQL does not natively optimize `GROUP BY` into loose index scans, so this manual `VALUES` structure guarantees O(1) index performance and avoids scanning the entire multi-million row domain tables.
+- Mandated that `db_index=True` must not be used on the same field that is already covered as the leading column in a composite index, preventing redundant index overhead during `INSERT INTO ... SELECT` bulk operations.
+
+**The Next Immediate Step:** Merge PR 61 into the main branch, deploy to the production server, and execute the initial bulk data load.
