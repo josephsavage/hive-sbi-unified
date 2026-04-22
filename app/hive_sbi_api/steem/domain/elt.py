@@ -50,9 +50,10 @@ def run_incremental_elt(cursor):
     # 2. Domain Table: Transfer operations
     cursor.execute("""
         WITH transfer_hwm AS (
-            SELECT op_acc_name, COALESCE(MAX(block_num), 0) as max_block_num
-            FROM steem_op_transfer
-            GROUP BY op_acc_name
+            SELECT h.op_acc_name, COALESCE((
+                SELECT MAX(block_num) FROM steem_op_transfer t WHERE t.op_acc_name = h.op_acc_name
+            ), 0) as max_block_num
+            FROM (VALUES ('sbi'), ('sbi2'), ('sbi3'), ('sbi4'), ('sbi5'), ('sbi6'), ('sbi7'), ('sbi8'), ('sbi9'), ('sbi10')) AS h(op_acc_name)
         )
         INSERT INTO steem_op_transfer (op_acc_name, block_num, timestamp, sender, receiver, amount, memo)
         SELECT 
@@ -72,9 +73,10 @@ def run_incremental_elt(cursor):
     # 3. Domain Table: Vote operations
     cursor.execute("""
         WITH vote_hwm AS (
-            SELECT op_acc_name, COALESCE(MAX(block_num), 0) as max_block_num
-            FROM steem_op_vote
-            GROUP BY op_acc_name
+            SELECT h.op_acc_name, COALESCE((
+                SELECT MAX(block_num) FROM steem_op_vote t WHERE t.op_acc_name = h.op_acc_name
+            ), 0) as max_block_num
+            FROM (VALUES ('sbi'), ('sbi2'), ('sbi3'), ('sbi4'), ('sbi5'), ('sbi6'), ('sbi7'), ('sbi8'), ('sbi9'), ('sbi10')) AS h(op_acc_name)
         )
         INSERT INTO steem_op_vote (op_acc_name, block_num, timestamp, voter, author, permlink, weight)
         SELECT 

@@ -33,7 +33,7 @@ class SteemOpTransfer(models.Model):
     """
     Transformed domain model for 'transfer' operations.
     """
-    op_acc_name = models.CharField(max_length=50, db_index=True)
+    op_acc_name = models.CharField(max_length=50)
     block_num = models.BigIntegerField()
     timestamp = models.DateTimeField()
     
@@ -57,7 +57,7 @@ class SteemOpVote(models.Model):
     """
     Transformed domain model for 'vote' operations.
     """
-    op_acc_name = models.CharField(max_length=50, db_index=True)
+    op_acc_name = models.CharField(max_length=50)
     block_num = models.BigIntegerField()
     timestamp = models.DateTimeField()
     
