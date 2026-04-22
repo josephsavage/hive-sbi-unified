@@ -22,19 +22,17 @@ def run_incremental_elt(cursor):
                 type, 
                 COALESCE(
                     CASE 
-                        -- 1. Standard valid JSON
-                        WHEN op_dict ~ '^\\s*\\{{' AND op_dict !~ '\\\\"' THEN CAST(op_dict AS JSONB)
+                        -- 1. Try casting if it looks like a standard JSON object
+                        WHEN op_dict ~ '^\\s*\\{{' THEN op_dict::jsonb
                         
-                        -- 2. Handle double-encoding (the \" issue)
-                        WHEN op_dict LIKE '%\\\\"%' THEN CAST(REPLACE(op_dict, '\\"', '"') AS JSONB)
+                        -- 2. If it's a "Double-Encoded" string (starts with a quote), 
+                        --    cast to ::json first to unescape it, then to ::jsonb
+                        WHEN op_dict ~ '^\\s*"' THEN (op_dict::json)::text::jsonb
                         
-                        -- 3. If it is wrapped in quotes as a string, try direct json cast
-                        WHEN op_dict ~ '^\\s*"' THEN CAST(op_dict::json AS JSONB)
-                        
-                        -- 4. Final attempt for anything else
-                        ELSE CAST(NULLIF(op_dict, '') AS JSONB)
+                        -- 3. Fallback to try a direct cast for anything else
+                        ELSE op_dict::jsonb 
                     END,
-                    '{{}}'::jsonb -- Ultimate fallback to satisfy NOT NULL
+                    '{{}}'::jsonb -- Ultimate fallback for NOT NULL violation
                 )
             FROM {table} 
             WHERE block > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = '{label}'), 0)
