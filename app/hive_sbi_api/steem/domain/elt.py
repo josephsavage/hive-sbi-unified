@@ -4,14 +4,23 @@ def run_incremental_elt(cursor):
     This must be called within an active transaction block.
     """
     
-    # 1. Staging Table: Consolidate raw data incrementally with corrected column mapping
-    # Legacy 'block' -> 'block_num'
-    # Legacy 'type'  -> 'op_type'
+    # Define the strictly-typed operations we want to migrate, explicitly excluding 
+    # messy payloads like 'comment' and 'custom_json' that cause parsing errors.
+    keep_types = (
+        "'vote', 'curation_reward', 'transfer', 'claim_reward_balance', "
+        "'fill_order', 'delegate_vesting_shares', 'author_reward', "
+        "'limit_order_create', 'transfer_to_vesting', 'fill_convert_request', "
+        "'convert', 'return_vesting_delegation', 'limit_order_cancel', "
+        "'comment_benefactor_reward', 'account_create_with_delegation', "
+        "'fill_vesting_withdraw', 'transfer_to_savings', 'fill_transfer_from_savings', "
+        "'transfer_from_savings', 'withdraw_vesting'"
+    )
+
+    # 1. Staging Table: Consolidate raw data incrementally
     source_tables = [f"sbi{i}_ops" if i > 1 else "sbi_ops" for i in range(1, 11)]
     
     fragments = []
     for table in source_tables:
-        # Match the hardcoded label logic from your original script
         label = table.replace("_ops", "")
         
         fragments.append(f"""
@@ -20,25 +29,12 @@ def run_incremental_elt(cursor):
                 block, 
                 timestamp, 
                 type, 
-                COALESCE(
-                    CASE 
-                        -- 1. If it looks like a standard JSON object or array, cast directly
-                        WHEN op_dict ~ '^\\s*[\\{{\\[]' THEN op_dict::jsonb
-                        
-                        -- 2. If it's a "stringified" object (starts with a quote),
-                        --    cast to ::json to let Postgres handle unescaping, 
-                        --    then convert to text and finally to jsonb.
-                        WHEN op_dict ~ '^\\s*"' THEN (op_dict::json)::text::jsonb
-                        
-                        -- 3. Catch-all attempt
-                        ELSE op_dict::jsonb 
-                    END,
-                    '{{}}'::jsonb -- Fallback to satisfy NOT NULL constraint
-                )
+                CAST(op_dict AS JSONB)
             FROM {table} 
-            WHERE block > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = '{label}'), 0)
+            WHERE type IN ({keep_types})
+              AND block > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = '{label}'), 0)
         """)
-        
+
     union_all_query = f"""
         INSERT INTO steem_sbi_op_raw (op_acc_name, block_num, timestamp, op_type, op_dict)
         {" UNION ALL ".join(fragments)}
@@ -46,7 +42,7 @@ def run_incremental_elt(cursor):
     
     cursor.execute(union_all_query)
     
-    # 2. Domain Table: Transfer operations (References clean staging table)
+    # 2. Domain Table: Transfer operations
     cursor.execute("""
         WITH transfer_hwm AS (
             SELECT h.op_acc_name, COALESCE((
@@ -69,7 +65,7 @@ def run_incremental_elt(cursor):
           AND r.block_num > COALESCE(hwm.max_block_num, 0);
     """)
     
-    # 3. Domain Table: Vote operations (References clean staging table)
+    # 3. Domain Table: Vote operations
     cursor.execute("""
         WITH vote_hwm AS (
             SELECT h.op_acc_name, COALESCE((
