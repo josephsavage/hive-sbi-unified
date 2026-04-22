@@ -76,3 +76,19 @@ class SteemOpVote(models.Model):
 
     def __str__(self):
         return f"Vote {self.weight} by {self.voter} on {self.author}/{self.permlink}"
+
+class SteemOpClaimRewardBalance(models.Model):
+    op_acc_name = models.CharField(max_length=50)
+    block_num = models.BigIntegerField()
+    timestamp = models.DateTimeField()
+    
+    # 3 decimal precision for STEEM/SBD, 6 for VESTS
+    reward_steem = models.DecimalField(max_digits=18, decimal_places=3)
+    reward_sbd = models.DecimalField(max_digits=18, decimal_places=3)
+    reward_vests = models.DecimalField(max_digits=24, decimal_places=6)
+
+    class Meta:
+        db_table = 'steem_op_claim_reward_balance'
+        indexes = [
+            models.Index(fields=['op_acc_name', 'block_num'], name='steem_claim_acc_block_idx'),
+        ]
