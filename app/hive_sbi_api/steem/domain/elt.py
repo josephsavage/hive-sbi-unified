@@ -22,22 +22,23 @@ def run_incremental_elt(cursor):
                 type, 
                 COALESCE(
                     CASE 
-                        -- 1. Try casting if it looks like a standard JSON object
-                        WHEN op_dict ~ '^\\s*\\{{' THEN op_dict::jsonb
+                        -- 1. If it looks like a standard JSON object or array, cast directly
+                        WHEN op_dict ~ '^\\s*[\\{{\\[]' THEN op_dict::jsonb
                         
-                        -- 2. If it's a "Double-Encoded" string (starts with a quote), 
-                        --    cast to ::json first to unescape it, then to ::jsonb
+                        -- 2. If it's a "stringified" object (starts with a quote),
+                        --    cast to ::json to let Postgres handle unescaping, 
+                        --    then convert to text and finally to jsonb.
                         WHEN op_dict ~ '^\\s*"' THEN (op_dict::json)::text::jsonb
                         
-                        -- 3. Fallback to try a direct cast for anything else
+                        -- 3. Catch-all attempt
                         ELSE op_dict::jsonb 
                     END,
-                    '{{}}'::jsonb -- Ultimate fallback for NOT NULL violation
+                    '{{}}'::jsonb -- Fallback to satisfy NOT NULL constraint
                 )
             FROM {table} 
             WHERE block > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = '{label}'), 0)
         """)
-
+        
     union_all_query = f"""
         INSERT INTO steem_sbi_op_raw (op_acc_name, block_num, timestamp, op_type, op_dict)
         {" UNION ALL ".join(fragments)}
