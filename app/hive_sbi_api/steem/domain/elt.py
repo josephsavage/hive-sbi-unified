@@ -66,7 +66,7 @@ def run_incremental_elt(cursor):
           -- Ultra-strict blockchain consensus filters
           AND LENGTH(COALESCE(r.op_dict->>'from', '')) <= 16
           AND LENGTH(COALESCE(r.op_dict->>'to', '')) <= 16
-          AND LENGTH(COALESCE(r.op_dict->>'amount', '')) <= 50;
+          AND LENGTH(COALESCE(r.op_dict->>'amount', '')) <= 56;
     """)
     
     # 3. Domain Table: Vote operations
