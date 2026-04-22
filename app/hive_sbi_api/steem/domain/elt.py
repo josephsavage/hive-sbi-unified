@@ -15,7 +15,17 @@ def run_incremental_elt(cursor):
         label = table.replace("_ops", "")
         
         fragments.append(f"""
-            SELECT '{label}', block, timestamp, type, CAST(op_dict AS JSONB) 
+            SELECT 
+                '{label}', 
+                block, 
+                timestamp, 
+                type, 
+                CASE 
+                    WHEN op_dict ~ '^\s*\{{.*\}}\s*$' THEN CAST(op_dict AS JSONB)
+                    -- If it's double-escaped (starts with \"), try to unescape it
+                    WHEN op_dict ~ '^\\"' THEN CAST(REPLACE(op_dict, '\\"', '"') AS JSONB)
+                    ELSE NULL 
+                END
             FROM {table} 
             WHERE block > COALESCE((SELECT MAX(block_num) FROM steem_sbi_op_raw WHERE op_acc_name = '{label}'), 0)
         """)
