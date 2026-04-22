@@ -62,7 +62,11 @@ def run_incremental_elt(cursor):
         FROM steem_sbi_op_raw r
         LEFT JOIN transfer_hwm hwm ON r.op_acc_name = hwm.op_acc_name
         WHERE r.op_type = 'transfer'
-          AND r.block_num > COALESCE(hwm.max_block_num, 0);
+          AND r.block_num > COALESCE(hwm.max_block_num, 0)
+          -- Ultra-strict blockchain consensus filters
+          AND LENGTH(COALESCE(r.op_dict->>'from', '')) <= 16
+          AND LENGTH(COALESCE(r.op_dict->>'to', '')) <= 16
+          AND LENGTH(COALESCE(r.op_dict->>'amount', '')) <= 50;
     """)
     
     # 3. Domain Table: Vote operations
@@ -85,5 +89,9 @@ def run_incremental_elt(cursor):
         FROM steem_sbi_op_raw r
         LEFT JOIN vote_hwm hwm ON r.op_acc_name = hwm.op_acc_name
         WHERE r.op_type = 'vote'
-          AND r.block_num > COALESCE(hwm.max_block_num, 0);
+          AND r.block_num > COALESCE(hwm.max_block_num, 0)
+          -- Ultra-strict blockchain consensus filters
+          AND LENGTH(COALESCE(r.op_dict->>'voter', '')) <= 16
+          AND LENGTH(COALESCE(r.op_dict->>'author', '')) <= 16
+          AND LENGTH(COALESCE(r.op_dict->>'permlink', '')) <= 256;
     """)
