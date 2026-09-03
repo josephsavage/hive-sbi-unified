@@ -1,20 +1,58 @@
 <!doctype html>{% load static %}
 <html lang="en">
 <head>
-  <title>{% block title %}{% endblock %} | SBI</title>
+  <title>{% block title %}{% endblock %} | Hive SBI</title>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <meta name="description" content="SBI">
-  <meta name="author" content="SBI.">
+
+  <meta name="description" content="{% block meta_description %}Hive SBI (Steem Basic Income) is a crowdfunded upvote-sharing program on the Hive blockchain that delivers passive rewards to members through recurring community votes.{% endblock %}">
+  <meta name="author" content="Hive SBI">
+  <link rel="canonical" href="https://www.hivesbi.com{{ request.get_full_path }}">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Hive SBI">
+  <meta property="og:title" content="{% block og_title %}Hive SBI &mdash; Hive Stake Based Income{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Hive SBI (Steem Basic Income) is a crowdfunded upvote-sharing program on the Hive blockchain that delivers passive rewards to members through recurring community votes.{% endblock %}">
+  <meta property="og:url" content="https://www.hivesbi.com{{ request.get_full_path }}">
+  <meta property="og:image" content="https://www.hivesbi.com{% static 'img/favicon.png' %}">
+
+  <!-- twitter:title/description omitted deliberately: Twitter's crawler falls back to og:title/og:description -->
+  <meta name="twitter:card" content="summary">
+
   <link rel="shortcut icon" href="{% static 'img/favicon.png' %}">
-  <link id="theme-style" rel="stylesheet" href="{% static 'assets/plugins/bootstrap/css/bootstrap.css' %}">  
+  <link id="theme-style" rel="stylesheet" href="{% static 'assets/plugins/bootstrap/css/bootstrap.css' %}">
   <link id="theme-style" rel="stylesheet" href="{% static 'assets/plugins/bootstrap/icons-1.8.1/font/bootstrap-icons.css' %}">
   <link id="theme-style" rel="stylesheet" href="{% static 'assets/css/main.css' %}">
 
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Hive SBI",
+    "alternateName": "Hive Stake Based Income",
+    "url": "https://www.hivesbi.com/",
+    "logo": "https://www.hivesbi.com{% static 'img/favicon.png' %}",
+    "sameAs": [
+      "https://discord.gg/Z5KVQ5whKR",
+      "https://peakd.com/@steembasicincome",
+      "https://docs.hivesbi.com/"
+    ]
+  }
+  </script>
+
+  {% if GA_MEASUREMENT_ID %}
+  <script async src="https://www.googletagmanager.com/gtag/js?id={{ GA_MEASUREMENT_ID }}"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', '{{ GA_MEASUREMENT_ID }}');
+  </script>
+  {% endif %}
+
   {% block extrastyle %}{% endblock %}
-</head> 
+</head>
 
 
 <body>

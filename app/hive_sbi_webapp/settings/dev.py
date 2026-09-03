@@ -1,6 +1,9 @@
 from .base import *
 
 DEBUG = True
+
+# Never fire GA4 for local development traffic.
+GA_MEASUREMENT_ID = ''
 DEBUG_TOOLBAR_CONFIG = {
     'SHOW_TOOLBAR_CALLBACK': lambda self: True
 }
