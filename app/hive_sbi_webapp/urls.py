@@ -19,6 +19,7 @@ from django.contrib import admin
 from django.urls import path
 from django.conf import settings
 from django.conf.urls import include
+from django.views.generic import RedirectView, TemplateView
 
 from hive_sbi_webapp.webapp.views import (HomeView,
                                           UserInfoView,
@@ -29,6 +30,26 @@ from hive_sbi_webapp.webapp.views import (HomeView,
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    path(
+        'robots.txt',
+        TemplateView.as_view(template_name='robots.txt', content_type='text/plain'),
+        name='robots_txt',
+    ),
+
+    path(
+        'sitemap.xml',
+        TemplateView.as_view(template_name='sitemap.xml', content_type='application/xml'),
+        name='sitemap_xml',
+    ),
+
+    # /richlist/ was indexed by Google but the feature was never wired up; 301 it
+    # to the homepage instead of leaving a dead link in search results.
+    path(
+        'richlist/',
+        RedirectView.as_view(url='/', permanent=True),
+        name='richlist_redirect',
+    ),
 
     path(
         '',

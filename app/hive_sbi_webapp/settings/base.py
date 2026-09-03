@@ -72,6 +72,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'hive_sbi_webapp.webapp.context_processors.analytics',
             ],
         },
     },
@@ -134,3 +135,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SBI_API_URL = os.environ.get('SBI_API_URL')
 SBI_API_URL_V1 = os.environ.get('SBI_API_URL_V1')
+
+# GA4 measurement ID (public, not secret) - can be overridden per-environment.
+GA_MEASUREMENT_ID = os.environ.get('GA_MEASUREMENT_ID', 'G-1BG25G15FP')
